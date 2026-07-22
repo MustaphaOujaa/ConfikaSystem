@@ -2,45 +2,32 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
+#[Fillable(['category_id', 'name', 'sku', 'description', 'price', 'quantity'])]
 class Product extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'name',
-        'sku',
-        'category_id',
-        'brand_id',
-        'quantity',
-        'purchase_price',
-        'selling_price',
-        'min_stock_alert',
-        'image_url',
-        'description',
-    ];
-
-    protected $appends = ['stock_status'];
-
-    public function category()
+    public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
     }
 
-    public function brand()
+    public function images(): HasMany
     {
-        return $this->belongsTo(Brand::class);
+        return $this->hasMany(ProductImage::class);
     }
 
-    public function getStockStatusAttribute()
+    protected function casts(): array
     {
-        if ($this->quantity <= 0) {
-            return 'out_of_stock';
-        } elseif ($this->quantity <= $this->min_stock_alert) {
-            return 'low_stock';
-        }
-        return 'in_stock';
+        return [
+            'price' => 'decimal:2',
+            'quantity' => 'integer',
+        ];
     }
 }

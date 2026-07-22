@@ -3,141 +3,54 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
-use App\Models\Category;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
-    /**
-     * Display a listing of the products with dynamic filtering.
-     */
-    public function index(Request $request)
+    public function index(): JsonResponse
     {
-        $query = Product::with(['category', 'brand']);
-
-        // Search by Product Name or SKU
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('sku', 'like', "%{$search}%");
-            });
-        }
-
-        // Filter by Category and its Subcategories
-        if ($request->filled('category_id')) {
-            $categoryId = $request->category_id;
-            // Get category IDs (parent + all child subcategories)
-            $categoryIds = Category::where('id', $categoryId)
-                ->orWhere('parent_id', $categoryId)
-                ->pluck('id');
-            $query->whereIn('category_id', $categoryIds);
-        }
-
-        // Filter by Brand
-        if ($request->filled('brand_id')) {
-            $query->where('brand_id', $request->brand_id);
-        }
-
-        // Filter by Price Range
-        if ($request->filled('min_price')) {
-            $query->where('selling_price', '>=', $request->min_price);
-        }
-        if ($request->filled('max_price')) {
-            $query->where('selling_price', '<=', $request->max_price);
-        }
-
-        // Filter by Stock Status
-        if ($request->filled('stock_status')) {
-            $status = $request->stock_status;
-            if ($status === 'out_of_stock') {
-                $query->where('quantity', '<=', 0);
-            } elseif ($status === 'low_stock') {
-                $query->whereColumn('quantity', '<=', 'min_stock_alert')
-                      ->where('quantity', '>', 0);
-            } elseif ($status === 'in_stock') {
-                $query->whereColumn('quantity', '>', 'min_stock_alert');
-            }
-        }
-
-        $perPage = $request->get('per_page', 12);
-        return response()->json($query->paginate($perPage));
+        return response()->json(Product::with(['category', 'images'])->latest()->paginate());
     }
 
-    /**
-     * Store a newly created product.
-     */
-    public function store(Request $request)
+    public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'sku' => 'required|string|unique:products,sku',
-            'category_id' => 'nullable|exists:categories,id',
-            'brand_id' => 'nullable|exists:brands,id',
-            'quantity' => 'required|integer|min:0',
-            'purchase_price' => 'required|numeric|min:0',
-            'selling_price' => 'required|numeric|min:0',
-            'min_stock_alert' => 'required|integer|min:0',
-            'image_url' => 'nullable|string',
-            'description' => 'nullable|string',
-        ]);
+        $product = Product::create($request->validate([
+            'category_id' => ['required', 'exists:categories,id'],
+            'name' => ['required', 'string', 'max:255'],
+            // 'sku' => ['required', 'string', 'max:255', 'unique:products,sku'],
+            'description' => ['nullable', 'string'],
+            'price' => ['required', 'numeric', 'min:0'],
+            'quantity' => ['required', 'integer', 'min:0'],
+        ]));
 
-        $product = Product::create($validated);
-        return response()->json($product->load(['category', 'brand']), 201);
+        return response()->json($product->load(['category', 'images']), 201);
     }
 
-    /**
-     * Display the specified product.
-     */
-    public function show(Product $product)
+    public function show(Product $product): JsonResponse
     {
-        return response()->json($product->load(['category', 'brand']));
+        return response()->json($product->load(['category', 'images']));
     }
 
-    /**
-     * Update the specified product.
-     */
-    public function update(Request $request, Product $product)
+    public function update(Request $request, Product $product): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'sku' => 'sometimes|required|string|unique:products,sku,' . $product->id,
-            'category_id' => 'nullable|exists:categories,id',
-            'brand_id' => 'nullable|exists:brands,id',
-            'quantity' => 'sometimes|required|integer|min:0',
-            'purchase_price' => 'sometimes|required|numeric|min:0',
-            'selling_price' => 'sometimes|required|numeric|min:0',
-            'min_stock_alert' => 'sometimes|required|integer|min:0',
-            'image_url' => 'nullable|string',
-            'description' => 'nullable|string',
-        ]);
+        $product->update($request->validate([
+            'category_id' => ['sometimes', 'required', 'exists:categories,id'],
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            // 'sku' => ['sometimes', 'required', 'string', 'max:255', Rule::unique('products', 'sku')->ignore($product)],
+            'description' => ['nullable', 'string'],
+            'price' => ['sometimes', 'required', 'numeric', 'min:0'],
+            'quantity' => ['sometimes', 'required', 'integer', 'min:0'],
+        ]));
 
-        $product->update($validated);
-        return response()->json($product->load(['category', 'brand']));
+        return response()->json($product->load(['category', 'images']));
     }
 
-    /**
-     * Remove the specified product.
-     */
-    public function destroy(Product $product)
+    public function destroy(Product $product): JsonResponse
     {
         $product->delete();
-        return response()->json(['message' => 'Product deleted successfully']);
-    }
 
-    /**
-     * Dedicated Endpoint for Low-Stock / Out-of-Stock Alerts.
-     */
-    public function lowStockAlerts()
-    {
-        $lowStockProducts = Product::with(['category', 'brand'])
-            ->whereColumn('quantity', '<=', 'min_stock_alert')
-            ->orderBy('quantity', 'asc')
-            ->get();
-
-        return response()->json([
-            'count' => $lowStockProducts->count(),
-            'items' => $lowStockProducts
-        ]);
+        return response()->json(status: 204);
     }
 }
