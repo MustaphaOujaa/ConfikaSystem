@@ -9,9 +9,24 @@ use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
+    private const LOW_STOCK_THRESHOLD = 5;
+
     public function index(): JsonResponse
     {
         return response()->json(Product::with(['category', 'images'])->latest()->paginate());
+    }
+
+    public function lowStockAlerts(): JsonResponse
+    {
+        $products = Product::with(['category', 'images'])
+            ->where('quantity', '<=', self::LOW_STOCK_THRESHOLD)
+            ->latest()
+            ->get();
+
+        return response()->json([
+            'count' => $products->count(),
+            'items' => $products,
+        ]);
     }
 
     public function store(Request $request): JsonResponse

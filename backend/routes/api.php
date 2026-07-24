@@ -5,18 +5,29 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ProductImageController;
 
-// Low-stock notifications endpoint
-Route::get('/products/low-stock', [ProductController::class, 'lowStockAlerts']);
+Route::post('/login', [AuthController::class, 'login']);
 
-// Products resource routes
-Route::apiResource('products', ProductController::class);
+Route::middleware('auth:sanctum')->group(function () {
+    // Low-stock notifications endpoint
+    Route::get('/products/low-stock', [ProductController::class, 'lowStockAlerts']);
 
-// Categories resource routes
-Route::apiResource('categories', CategoryController::class)->only(['index', 'store']);
+    // Products resource routes
+    Route::apiResource('products', ProductController::class);
 
-// Brands resource routes
-Route::apiResource('brands', BrandController::class)->only(['index', 'store']);
+    // Categories resource routes
+    Route::apiResource('categories', CategoryController::class);
 
-// Transactions routes (sales and purchases)
-Route::apiResource('transactions', TransactionController::class)->only(['index', 'store']);
+    // Brands resource routes
+    Route::apiResource('brands', BrandController::class)->only(['index', 'store']);
+
+    // Product image routes
+    Route::post('/products/{product}/images', [ProductImageController::class, 'store']);
+    Route::match(['put', 'patch'], '/images/{image}', [ProductImageController::class, 'update']);
+    Route::delete('/images/{image}', [ProductImageController::class, 'destroy']);
+
+    // Transactions routes (sales and purchases)
+    Route::apiResource('transactions', TransactionController::class)->only(['index', 'store']);
+});
