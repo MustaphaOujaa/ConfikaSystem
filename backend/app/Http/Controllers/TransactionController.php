@@ -5,11 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\Product;
+use App\Services\DiscordLowStockNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class TransactionController extends Controller
 {
+    public function __construct(private readonly DiscordLowStockNotifier $discordLowStockNotifier)
+    {
+    }
+
     public function index()
     {
         return response()->json(Transaction::with('items.product')->latest()->paginate(15));
@@ -37,7 +42,7 @@ class TransactionController extends Controller
                 'transaction_date' => now(),
             ]);
 
-            $lowStockTriggered = [];
+            $lowStockTriggered = collect();
 
             foreach ($validated['items'] as $item) {
                 TransactionItem::create([
@@ -47,7 +52,7 @@ class TransactionController extends Controller
                     'unit_price' => $item['unit_price'],
                 ]);
 
-                $product = Product::find($item['product_id']);
+                $product = Product::whereKey($item['product_id'])->lockForUpdate()->firstOrFail();
                 if ($validated['type'] === 'sale') {
                     if ($product->quantity < $item['quantity']) {
                         throw new \Exception("Insufficient stock for product: {$product->name}");
@@ -59,14 +64,16 @@ class TransactionController extends Controller
                 $product->save();
 
                 // Check if now low stock
-                if ($product->quantity <= $product->min_stock_alert) {
-                    $lowStockTriggered[] = $product;
+                if ($product->quantity <= Product::LOW_STOCK_THRESHOLD) {
+                    $lowStockTriggered->push($product->fresh());
                 }
             }
 
+            DB::afterCommit(fn () => $this->discordLowStockNotifier->notify($lowStockTriggered));
+
             return response()->json([
                 'transaction' => $transaction->load('items.product'),
-                'low_stock_alerts' => $lowStockTriggered
+                'low_stock_alerts' => $lowStockTriggered->values(),
             ], 201);
         });
     }
