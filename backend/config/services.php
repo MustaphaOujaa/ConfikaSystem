@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'discord' => [
+        'low_stock_webhook_url' => env('DISCORD_LOW_STOCK_WEBHOOK_URL'),
+    ],
+
 ];

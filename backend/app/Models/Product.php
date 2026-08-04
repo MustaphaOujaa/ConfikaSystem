@@ -13,6 +13,8 @@ class Product extends Model
 {
     use HasFactory;
 
+    public const LOW_STOCK_THRESHOLD = 10;
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
