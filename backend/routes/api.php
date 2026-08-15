@@ -7,6 +7,7 @@ use App\Http\Controllers\BrandController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProductImageController;
+use App\Http\Controllers\ScannerController;
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -30,4 +31,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Transactions routes (sales and purchases)
     Route::apiResource('transactions', TransactionController::class)->only(['index', 'store']);
+
+    // Scanner routes
+    Route::get('/scanner/products/{barcode}', [ScannerController::class, 'product']);
+    Route::post('/scanner/sales', [ScannerController::class, 'sale']);
 });

@@ -32,7 +32,7 @@ class ProductController extends Controller
         $product = Product::create($request->validate([
             'category_id' => ['required', 'exists:categories,id'],
             'name' => ['required', 'string', 'max:255'],
-            // 'sku' => ['required', 'string', 'max:255', 'unique:products,sku'],
+            'barcode' => ['required', 'string', 'max:255', 'unique:products,barcode'],
             'description' => ['nullable', 'string'],
             'price' => ['required', 'numeric', 'min:0'],
             'quantity' => ['required', 'integer', 'min:0'],
@@ -51,7 +51,7 @@ class ProductController extends Controller
         $product->update($request->validate([
             'category_id' => ['sometimes', 'required', 'exists:categories,id'],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            // 'sku' => ['sometimes', 'required', 'string', 'max:255', Rule::unique('products', 'sku')->ignore($product)],
+            'barcode' => ['sometimes', 'required', 'string', 'max:255', Rule::unique('products', 'barcode')->ignore($product)],
             'description' => ['nullable', 'string'],
             'price' => ['sometimes', 'required', 'numeric', 'min:0'],
             'quantity' => ['sometimes', 'required', 'integer', 'min:0'],

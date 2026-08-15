@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['category_id', 'name', 'sku', 'description', 'price', 'quantity'])]
+#[Fillable(['category_id', 'name', 'barcode', 'description', 'price', 'quantity'])]
 class Product extends Model
 {
     use HasFactory;
