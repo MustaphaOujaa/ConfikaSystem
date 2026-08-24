@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Edit, Trash2, Tags, Bookmark } from 'lucide-react';
+import { useSelector } from 'react-redux';
 import { 
   useGetCategoriesQuery, 
   useCreateCategoryMutation, 
@@ -10,8 +11,12 @@ import {
 } from '../api/apiSlice';
 import Modal from '../components/common/Modal';
 import Pagination from '../components/common/Pagination';
+import { selectCurrentUser } from '../store/authSlice';
 
 export default function CategoriesPage() {
+  const user = useSelector(selectCurrentUser);
+  const isAdmin = user?.role === 'admin';
+
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState('categories'); // 'categories' | 'brands'
 
@@ -108,7 +113,7 @@ export default function CategoriesPage() {
   return (
     <div style={styles.container}>
       {/* Tab Switcher & Action Header */}
-      <div style={styles.toolbar}>
+      <div className="responsive-toolbar" style={styles.toolbar}>
         <div style={styles.tabs}>
           <button
             onClick={() => setActiveTab('categories')}
@@ -147,7 +152,7 @@ export default function CategoriesPage() {
 
       {/* Tab Content: Categories */}
       {activeTab === 'categories' && (
-        <div style={styles.card}>
+        <div className="responsive-table-container" style={styles.card}>
           {loadingCategories ? (
             <div style={styles.loading}>Chargement des catégories...</div>
           ) : categories.length === 0 ? (

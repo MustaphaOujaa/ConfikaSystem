@@ -9,8 +9,13 @@ import {
   ShoppingCart,
   TrendingUp,
   Printer,
-  Calendar
+  Calendar,
+  Search,
+  ShoppingBag,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
+import { useSelector } from 'react-redux';
 import { 
   useGetProductsQuery, 
   useGetLowStockAlertsQuery, 
@@ -18,17 +23,35 @@ import {
   useGetTransactionsQuery,
   useGetDailyReportQuery
 } from '../api/apiSlice';
+import { selectCurrentUser } from '../store/authSlice';
 
 export default function DashboardPage() {
+  const user = useSelector(selectCurrentUser);
+  const isAdmin = user?.role === 'admin';
+
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [soldSearch, setSoldSearch] = useState('');
+  const [showSoldTable, setShowSoldTable] = useState(true);
 
   const { data: productsData, isLoading: loadingProducts } = useGetProductsQuery({ page: 1 });
   const { data: lowStockData, isLoading: loadingLowStock } = useGetLowStockAlertsQuery();
   const { data: categoriesData, isLoading: loadingCategories } = useGetCategoriesQuery({ page: 1 });
   const { data: transactionsData, isLoading: loadingTransactions } = useGetTransactionsQuery({ page: 1 });
   const { data: dailyReport, isLoading: loadingDaily } = useGetDailyReportQuery(selectedDate, {
-    pollingInterval: selectedDate === todayStr ? 15000 : undefined,
+    skip: !isAdmin,
+    pollingInterval: selectedDate === todayStr && isAdmin ? 15000 : undefined,
+  });
+
+  const productsSoldList = dailyReport?.products_sold || [];
+  const filteredSoldProducts = productsSoldList.filter((item) => {
+    if (!soldSearch.trim()) return true;
+    const q = soldSearch.toLowerCase();
+    return (
+      item.name.toLowerCase().includes(q) ||
+      item.barcode.toLowerCase().includes(q) ||
+      (item.category && item.category.toLowerCase().includes(q))
+    );
   });
 
   const totalProducts = productsData?.total || productsData?.data?.length || 0;
@@ -59,74 +82,180 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {/* Daily Operations & History Report Box */}
-      <div style={styles.dailyReportCard}>
-        <div style={styles.dailyHeader}>
-          <div style={styles.dailyTitle}>
-            <Calendar size={20} style={{ color: '#dc2626', marginRight: '8px' }} />
-            <span>Rapport Journalier des Ventes & Bénéfices</span>
-          </div>
+      {/* Daily Operations & Financial Report Box (Visible exclusively to Admin) */}
+      {isAdmin && (
+        <div style={styles.dailyReportCard}>
+          <div style={styles.dailyHeader}>
+            <div style={styles.dailyTitle}>
+              <Calendar size={20} style={{ color: '#dc2626', marginRight: '8px' }} />
+              <span>Rapport Journalier des Ventes & Bénéfices</span>
+            </div>
 
-          <div style={styles.dailyControls}>
-            {/* Aujourd'hui quick button */}
-            <button
-              onClick={setToday}
-              style={{
-                ...styles.dateQuickBtn,
-                ...(selectedDate === todayStr ? styles.dateQuickActive : {}),
-              }}
-            >
-              Aujourd'hui
-            </button>
-
-            {/* Date Picker Input — max=today, past dates only */}
-            <div style={styles.dateInputWrapper}>
-              <Calendar size={14} style={styles.datePickerIcon} />
-              <input
-                type="date"
-                value={selectedDate}
-                max={todayStr}
-                onChange={(e) => {
-                  if (e.target.value <= todayStr) setSelectedDate(e.target.value);
+            <div style={styles.dailyControls}>
+              {/* Aujourd'hui quick button */}
+              <button
+                onClick={setToday}
+                style={{
+                  ...styles.dateQuickBtn,
+                  ...(selectedDate === todayStr ? styles.dateQuickActive : {}),
                 }}
-                style={styles.dateInput}
-              />
+              >
+                Aujourd'hui
+              </button>
+
+              {/* Date Picker Input — max=today, past dates only */}
+              <div style={styles.dateInputWrapper}>
+                <Calendar size={14} style={styles.datePickerIcon} />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  max={todayStr}
+                  onChange={(e) => {
+                    if (e.target.value <= todayStr) setSelectedDate(e.target.value);
+                  }}
+                  style={styles.dateInput}
+                />
+              </div>
+
+              {/* Printable Blade Report Button */}
+              <button onClick={handlePrintDailyBlade} style={styles.printBladeReportBtn}>
+                <Printer size={15} style={{ marginRight: '6px' }} />
+                <span>Imprimer le Rapport</span>
+              </button>
+            </div>
+          </div>
+
+          <div style={styles.dailyGrid}>
+            <div style={styles.dailyItem}>
+              <div style={styles.dailyLabel}>Produits Vendus le {selectedDate}</div>
+              <div style={styles.dailyVal('#111827')}>
+                {loadingDaily ? '...' : `${dailyReport?.products_sold_count || 0} Unités`}
+              </div>
+              <div style={styles.dailySub}>Nombre d'articles encaissés cette journée</div>
             </div>
 
-            {/* Printable Blade Report Button */}
-            <button onClick={handlePrintDailyBlade} style={styles.printBladeReportBtn}>
-              <Printer size={15} style={{ marginRight: '6px' }} />
-              <span>Imprimer le Rapport</span>
-            </button>
+            <div style={styles.dailyItem}>
+              <div style={styles.dailyLabel}>Chiffre d'Affaires du {selectedDate}</div>
+              <div style={styles.dailyVal('#16a34a')}>
+                {loadingDaily ? '...' : `${Number(dailyReport?.total_sales_revenue || 0).toFixed(2)} MAD`}
+              </div>
+              <div style={styles.dailySub}>Revenu brut des ventes enregistrées</div>
+            </div>
+
+            <div style={styles.dailyItem}>
+              <div style={styles.dailyLabel}>Bénéfice Net du {selectedDate} (Gain)</div>
+              <div style={styles.dailyVal('#dc2626')}>
+                {loadingDaily ? '...' : `+${Number(dailyReport?.net_profit_today || 0).toFixed(2)} MAD`}
+              </div>
+              <div style={styles.dailySub}>Ventes moins Coût des Marchandises</div>
+            </div>
+          </div>
+
+          {/* Detailed Sold Products Table Section */}
+          <div style={styles.soldSection}>
+            <div style={styles.soldSectionHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShoppingBag size={18} style={{ color: '#dc2626' }} />
+                <span style={styles.soldSectionTitle}>
+                  Détail des Produits Vendus ({productsSoldList.length} Référence{productsSoldList.length > 1 ? 's' : ''})
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {productsSoldList.length > 0 && (
+                  <div style={styles.soldSearchWrapper}>
+                    <Search size={14} style={styles.soldSearchIcon} />
+                    <input
+                      type="text"
+                      placeholder="Filtrer par nom ou code..."
+                      value={soldSearch}
+                      onChange={(e) => setSoldSearch(e.target.value)}
+                      style={styles.soldSearchInput}
+                    />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowSoldTable(!showSoldTable)}
+                  style={styles.toggleTableBtn}
+                  title={showSoldTable ? "Masquer le tableau" : "Afficher le tableau"}
+                >
+                  {showSoldTable ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {showSoldTable && (
+              loadingDaily ? (
+                <div style={styles.loading}>Chargement des ventes détaillées...</div>
+              ) : productsSoldList.length === 0 ? (
+                <div style={styles.emptySoldState}>
+                  Aucun produit vendu enregistré pour la date du {selectedDate}.
+                </div>
+              ) : (
+                <div style={styles.soldTableWrapper}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...styles.th, width: '30px' }}>#</th>
+                        <th style={styles.th}>Article</th>
+                        <th style={styles.th}>Code-barres</th>
+                        <th style={styles.th}>Catégorie</th>
+                        <th style={{ ...styles.th, textAlign: 'center' }}>Qté Vendue</th>
+                        <th style={{ ...styles.th, textAlign: 'right' }}>Prix Unit.</th>
+                        <th style={{ ...styles.th, textAlign: 'right' }}>Total Vente</th>
+                        <th style={{ ...styles.th, textAlign: 'right' }}>Gain Net</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSoldProducts.length === 0 ? (
+                        <tr>
+                          <td colSpan="8" style={{ ...styles.td, textAlign: 'center', color: '#6b7280', padding: '20px' }}>
+                            Aucun produit correspondant au filtre "{soldSearch}".
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredSoldProducts.map((item, idx) => (
+                          <tr key={item.product_id} style={styles.tr}>
+                            <td style={{ ...styles.td, color: '#9ca3af', width: '30px' }}>{idx + 1}</td>
+                            <td style={{ ...styles.td, fontWeight: '600', color: '#111827' }}>
+                              {item.name}
+                              {item.brand && <span style={styles.brandBadge}>{item.brand}</span>}
+                            </td>
+                            <td style={{ ...styles.td, fontFamily: 'monospace', fontSize: '12px' }}>{item.barcode}</td>
+                            <td style={styles.td}>{item.category}</td>
+                            <td style={{ ...styles.td, textAlign: 'center' }}>
+                              <span style={styles.qtyBadge}>{item.quantity_sold}</span>
+                            </td>
+                            <td style={{ ...styles.td, textAlign: 'right' }}>{Number(item.unit_price).toFixed(2)} MAD</td>
+                            <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700', color: '#111827' }}>
+                              {Number(item.total_revenue).toFixed(2)} MAD
+                            </td>
+                            <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700', color: '#16a34a' }}>
+                              +{Number(item.total_profit).toFixed(2)} MAD
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    {productsSoldList.length > 0 && (
+                      <tfoot>
+                        <tr style={styles.tfootRow}>
+                          <td colSpan="4" style={{ ...styles.td, fontWeight: '800', textAlign: 'right' }}>TOTAUX DU JOUR :</td>
+                          <td style={{ ...styles.td, textAlign: 'center', fontWeight: '800' }}>{dailyReport?.products_sold_count || 0}</td>
+                          <td style={styles.td}></td>
+                          <td style={{ ...styles.td, textAlign: 'right', fontWeight: '800' }}>{Number(dailyReport?.total_sales_revenue || 0).toFixed(2)} MAD</td>
+                          <td style={{ ...styles.td, textAlign: 'right', fontWeight: '800', color: '#16a34a' }}>+{Number(dailyReport?.net_profit_today || 0).toFixed(2)} MAD</td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              )
+            )}
           </div>
         </div>
-
-        <div style={styles.dailyGrid}>
-          <div style={styles.dailyItem}>
-            <div style={styles.dailyLabel}>Produits Vendus le {selectedDate}</div>
-            <div style={styles.dailyVal('#111827')}>
-              {loadingDaily ? '...' : `${dailyReport?.products_sold_count || 0} Unités`}
-            </div>
-            <div style={styles.dailySub}>Nombre d'articles encaissés cette journée</div>
-          </div>
-
-          <div style={styles.dailyItem}>
-            <div style={styles.dailyLabel}>Chiffre d'Affaires du {selectedDate}</div>
-            <div style={styles.dailyVal('#16a34a')}>
-              {loadingDaily ? '...' : `${Number(dailyReport?.total_sales_revenue || 0).toFixed(2)} MAD`}
-            </div>
-            <div style={styles.dailySub}>Revenu brut des ventes enregistrées</div>
-          </div>
-
-          <div style={styles.dailyItem}>
-            <div style={styles.dailyLabel}>Bénéfice Net du {selectedDate} (Gain)</div>
-            <div style={styles.dailyVal('#dc2626')}>
-              {loadingDaily ? '...' : `+${Number(dailyReport?.net_profit_today || 0).toFixed(2)} MAD`}
-            </div>
-            <div style={styles.dailySub}>Ventes moins Coût des Marchandises</div>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* KPI Cards Grid */}
       <div style={styles.statsGrid}>
@@ -268,9 +397,17 @@ export default function DashboardPage() {
                       <td style={styles.td}>
                         {new Date(tx.transaction_date || tx.created_at).toLocaleDateString('fr-FR')}
                       </td>
-                      <td style={styles.td}>{tx.items?.length || 0} articles</td>
-                      <td style={{ ...styles.td, fontWeight: '700', color: '#dc2626' }}>
-                        {Number(tx.total_amount).toFixed(2)} MAD
+                      <td style={styles.td}>{tx.items?.length || 0} article{tx.items?.length > 1 ? 's' : ''}</td>
+                      <td style={{ ...styles.td, fontWeight: '700', color: tx.type === 'sale' ? '#16a34a' : '#2563eb' }}>
+                        {tx.type === 'sale' ? (
+                          `${Number(tx.total_amount).toFixed(2)} MAD`
+                        ) : isAdmin ? (
+                          `${Number(tx.total_amount).toFixed(2)} MAD`
+                        ) : (
+                          <span style={{ color: '#16a34a', fontWeight: '600' }}>
+                            +{tx.items?.reduce((s, i) => s + (i.quantity || 0), 0) || 0} Unités
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -562,5 +699,91 @@ const styles = {
     border: '1px solid',
     fontSize: '11px',
     fontWeight: '700',
+  },
+  soldSection: {
+    marginTop: '20px',
+    paddingTop: '16px',
+    borderTop: '1px solid #e5e7eb',
+  },
+  soldSectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '12px',
+    flexWrap: 'wrap',
+    gap: '10px',
+  },
+  soldSectionTitle: {
+    fontSize: '14px',
+    fontWeight: '700',
+    color: '#111827',
+  },
+  soldSearchWrapper: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  soldSearchIcon: {
+    position: 'absolute',
+    left: '8px',
+    color: '#9ca3af',
+    pointerEvents: 'none',
+  },
+  soldSearchInput: {
+    padding: '5px 10px 5px 28px',
+    fontSize: '12px',
+    borderRadius: '6px',
+    border: '1px solid #d1d5db',
+    outline: 'none',
+    width: '180px',
+    backgroundColor: '#ffffff',
+  },
+  toggleTableBtn: {
+    padding: '5px 8px',
+    backgroundColor: '#f3f4f6',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#4b5563',
+  },
+  emptySoldState: {
+    padding: '20px',
+    textAlign: 'center',
+    color: '#6b7280',
+    fontSize: '13px',
+    backgroundColor: '#f9fafb',
+    borderRadius: '6px',
+    border: '1px dashed #d1d5db',
+  },
+  soldTableWrapper: {
+    overflowX: 'auto',
+    borderRadius: '6px',
+    border: '1px solid #e5e7eb',
+    backgroundColor: '#ffffff',
+  },
+  brandBadge: {
+    marginLeft: '6px',
+    fontSize: '11px',
+    fontWeight: '600',
+    color: '#4f46e5',
+    backgroundColor: '#eef2ff',
+    padding: '1px 6px',
+    borderRadius: '4px',
+  },
+  qtyBadge: {
+    display: 'inline-block',
+    padding: '2px 8px',
+    backgroundColor: '#f3f4f6',
+    borderRadius: '12px',
+    fontSize: '12px',
+    fontWeight: '700',
+    color: '#111827',
+  },
+  tfootRow: {
+    backgroundColor: '#f9fafb',
+    borderTop: '2px solid #e5e7eb',
   },
 };

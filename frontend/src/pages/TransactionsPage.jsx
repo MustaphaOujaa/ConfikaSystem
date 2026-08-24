@@ -7,6 +7,7 @@ import {
   Printer,
   X 
 } from 'lucide-react';
+import { useSelector } from 'react-redux';
 import { 
   useGetTransactionsQuery, 
   useGetProductsQuery, 
@@ -14,8 +15,12 @@ import {
 } from '../api/apiSlice';
 import Modal from '../components/common/Modal';
 import Pagination from '../components/common/Pagination';
+import { selectCurrentUser } from '../store/authSlice';
 
 export default function TransactionsPage() {
+  const user = useSelector(selectCurrentUser);
+  const isAdmin = user?.role === 'admin';
+
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState('');
 
@@ -127,7 +132,7 @@ export default function TransactionsPage() {
   return (
     <div style={styles.container}>
       {/* Top Filter & Toolbar */}
-      <div style={styles.toolbar}>
+      <div className="responsive-toolbar" style={styles.toolbar}>
         <div style={styles.filterGroup}>
           <select
             value={typeFilter}
@@ -140,14 +145,16 @@ export default function TransactionsPage() {
           </select>
         </div>
 
-        <button onClick={handleOpenAddTx} style={styles.addBtn}>
-          <Plus size={16} style={{ marginRight: '6px' }} />
-          <span>Enregistrer une Transaction</span>
-        </button>
+        {isAdmin && (
+          <button onClick={handleOpenAddTx} style={styles.addBtn}>
+            <Plus size={16} style={{ marginRight: '6px' }} />
+            <span>Enregistrer une Transaction</span>
+          </button>
+        )}
       </div>
 
       {/* Transactions Table */}
-      <div style={styles.card}>
+      <div className="responsive-table-container" style={styles.card}>
         {loadingTx ? (
           <div style={styles.loading}>Chargement de l'historique...</div>
         ) : filteredTransactions.length === 0 ? (
@@ -191,19 +198,33 @@ export default function TransactionsPage() {
                     {new Date(tx.transaction_date || tx.created_at).toLocaleString('fr-FR')}
                   </td>
                   <td style={styles.td}>{tx.items?.length || 0} Produits</td>
-                  <td style={{ ...styles.td, fontWeight: '800', color: '#dc2626' }}>
-                    {Number(tx.total_amount).toFixed(2)} MAD
+                  <td style={{ ...styles.td, fontWeight: '800' }}>
+                    {tx.type === 'sale' ? (
+                      <span style={{ color: '#059669' }}>
+                        {Number(tx.total_amount).toFixed(2)} MAD
+                      </span>
+                    ) : isAdmin ? (
+                      <span style={{ color: '#2563eb' }}>
+                        {Number(tx.total_amount).toFixed(2)} MAD
+                      </span>
+                    ) : (
+                      <span style={{ color: '#16a34a', fontWeight: '700' }}>
+                        +{tx.items?.reduce((s, i) => s + (i.quantity || 0), 0) || 0} Unités
+                      </span>
+                    )}
                   </td>
                   <td style={{ ...styles.td, textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '6px' }}>
-                      <button
-                        onClick={() => handlePrintBladeReceipt(tx.id)}
-                        style={styles.printIconBtn}
-                        title="Imprimer le Ticket de Caisse"
-                      >
-                        <Printer size={15} />
-                        <span style={{ marginLeft: '4px' }}>Ticket</span>
-                      </button>
+                      {(tx.type === 'sale' || isAdmin) && (
+                        <button
+                          onClick={() => handlePrintBladeReceipt(tx.id)}
+                          style={styles.printIconBtn}
+                          title="Imprimer le Ticket de Caisse"
+                        >
+                          <Printer size={15} />
+                          <span style={{ marginLeft: '4px' }}>Ticket</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => handleOpenDetails(tx)}
                         style={styles.iconBtn}
@@ -239,7 +260,7 @@ export default function TransactionsPage() {
             <div>
               <strong>Type:</strong>{' '}
               <span style={{ textTransform: 'uppercase', color: selectedTx?.type === 'sale' ? '#059669' : '#2563eb' }}>
-                {selectedTx?.type === 'sale' ? 'Vente' : 'Achat'}
+                {selectedTx?.type === 'sale' ? 'Vente Client' : 'Achat / Entrée Stock'}
               </span>
             </div>
             <div>
@@ -251,37 +272,61 @@ export default function TransactionsPage() {
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>Produit</th>
-                <th style={{ textAlign: 'center' }}>Qté</th>
-                <th style={{ textAlign: 'right' }}>Prix Unitaire</th>
-                <th style={{ textAlign: 'right' }}>Sous-total</th>
+                <th style={{ textAlign: 'center' }}>Quantité</th>
+                {(selectedTx?.type === 'sale' || isAdmin) && <th style={{ textAlign: 'right' }}>Prix Unitaire</th>}
+                {(selectedTx?.type === 'sale' || isAdmin) && <th style={{ textAlign: 'right' }}>Sous-total</th>}
               </tr>
             </thead>
             <tbody>
               {selectedTx?.items?.map((item) => (
                 <tr key={item.id}>
                   <td>{item.product?.name || `Produit #${item.product_id}`}</td>
-                  <td style={{ textAlign: 'center' }}>{item.quantity}</td>
-                  <td style={{ textAlign: 'right' }}>{Number(item.unit_price).toFixed(2)} MAD</td>
-                  <td style={{ textAlign: 'right', fontWeight: '600' }}>
-                    {(item.quantity * item.unit_price).toFixed(2)} MAD
+                  <td style={{ textAlign: 'center', fontWeight: '600' }}>
+                    {selectedTx?.type === 'purchase' ? `+${item.quantity}` : item.quantity}
                   </td>
+                  {(selectedTx?.type === 'sale' || isAdmin) && (
+                    <td style={{ textAlign: 'right' }}>{Number(item.unit_price).toFixed(2)} MAD</td>
+                  )}
+                  {(selectedTx?.type === 'sale' || isAdmin) && (
+                    <td style={{ textAlign: 'right', fontWeight: '600' }}>
+                      {(item.quantity * item.unit_price).toFixed(2)} MAD
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
 
           <div style={styles.detailsTotalRow}>
-            <span>MONTANT TOTAL:</span>
-            <span style={{ color: '#dc2626' }}>{Number(selectedTx?.total_amount || 0).toFixed(2)} MAD</span>
+            {selectedTx?.type === 'sale' ? (
+              <>
+                <span>TOTAL VENTE :</span>
+                <span style={{ color: '#059669' }}>{Number(selectedTx?.total_amount || 0).toFixed(2)} MAD</span>
+              </>
+            ) : isAdmin ? (
+              <>
+                <span>COÛT TOTAL ACHAT :</span>
+                <span style={{ color: '#2563eb' }}>{Number(selectedTx?.total_amount || 0).toFixed(2)} MAD</span>
+              </>
+            ) : (
+              <>
+                <span>TOTAL ARTICLES ENTRÉS :</span>
+                <span style={{ color: '#16a34a' }}>
+                  +{selectedTx?.items?.reduce((s, i) => s + (i.quantity || 0), 0) || 0} Unités
+                </span>
+              </>
+            )}
           </div>
 
-          <button
-            onClick={() => handlePrintBladeReceipt(selectedTx?.id)}
-            style={styles.modalPrintBtn}
-          >
-            <Printer size={16} style={{ marginRight: '6px' }} />
-            <span>Imprimer le Ticket</span>
-          </button>
+          {(selectedTx?.type === 'sale' || isAdmin) && (
+            <button
+              onClick={() => handlePrintBladeReceipt(selectedTx?.id)}
+              style={styles.modalPrintBtn}
+            >
+              <Printer size={16} style={{ marginRight: '6px' }} />
+              <span>Imprimer le Ticket</span>
+            </button>
+          )}
         </div>
       </Modal>
 
@@ -433,12 +478,16 @@ const styles = {
     gap: '12px',
   },
   selectFilter: {
-    padding: '9px 14px',
-    fontSize: '14px',
+    height: '38px',
+    padding: '8px 12px',
+    fontSize: '13px',
     border: '1px solid #d1d5db',
     borderRadius: '6px',
     backgroundColor: '#ffffff',
     color: '#374151',
+    cursor: 'pointer',
+    outline: 'none',
+    minWidth: '220px',
   },
   addBtn: {
     display: 'inline-flex',

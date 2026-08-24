@@ -11,6 +11,7 @@ import {
   Printer,
   X
 } from 'lucide-react';
+import { useSelector } from 'react-redux';
 import { 
   useGetProductsQuery, 
   useLazyGetScannerProductQuery, 
@@ -19,8 +20,12 @@ import {
 } from '../api/apiSlice';
 import Modal from '../components/common/Modal';
 import { playSuccessBeep, playErrorBeep } from '../utils/audio';
+import { selectCurrentUser } from '../store/authSlice';
 
 export default function PosPage() {
+  const user = useSelector(selectCurrentUser);
+  const isAdmin = user?.role === 'admin';
+
   const [catalogSearch, setCatalogSearch] = useState('');
   const [cart, setCart] = useState([]);
   const [transactionType, setTransactionType] = useState('sale'); // 'sale' | 'purchase'
@@ -181,12 +186,12 @@ export default function PosPage() {
         };
         result = await processScannerSale(payload).unwrap();
       } else {
+        // Purchase (Entrée de stock): Backend calculates the cost from product cost_price automatically
         const payload = {
-          type: transactionType,
+          type: 'purchase',
           items: cart.map((item) => ({
             product_id: item.product.id,
             quantity: item.quantity,
-            unit_price: item.unit_price,
           })),
         };
         result = await createTransaction(payload).unwrap();
@@ -206,9 +211,9 @@ export default function PosPage() {
   };
 
   return (
-    <div style={styles.container}>
+    <div className="pos-container" style={styles.container}>
       {/* Left Column: Unified Search & Catalog */}
-      <div style={styles.leftCol}>
+      <div className="pos-left-col" style={styles.leftCol}>
         <div style={{ ...styles.card, flexGrow: 1 }}>
           {/* Card Header */}
           <div style={styles.cardHeader}>
@@ -271,7 +276,7 @@ export default function PosPage() {
       </div>
 
       {/* Right Column: Checkout Cart */}
-      <div style={styles.rightCol}>
+      <div className="pos-right-col" style={styles.rightCol}>
         <div style={styles.cartCard}>
           {/* Cart Header */}
           <div style={styles.cartHeader}>
@@ -325,9 +330,19 @@ export default function PosPage() {
                       </button>
                     </div>
 
-                    <div style={styles.cartPriceBox}>
-                      {(item.quantity * item.unit_price).toFixed(2)} MAD
-                    </div>
+                    {transactionType === 'sale' ? (
+                      <div style={styles.cartPriceBox}>
+                        {(item.quantity * item.unit_price).toFixed(2)} MAD
+                      </div>
+                    ) : isAdmin ? (
+                      <div style={styles.cartPriceBox}>
+                        {(item.quantity * (parseFloat(item.product.cost_price) || 0)).toFixed(2)} MAD
+                      </div>
+                    ) : (
+                      <div style={{ ...styles.cartPriceBox, color: '#16a34a', fontWeight: '700' }}>
+                        +{item.quantity} Unité{item.quantity > 1 ? 's' : ''}
+                      </div>
+                    )}
 
                     <button
                       onClick={() => removeFromCart(item.product.id)}
@@ -344,10 +359,26 @@ export default function PosPage() {
 
           {/* Cart Summary & Checkout Action */}
           <div style={styles.cartFooter}>
-            <div style={styles.totalRow}>
-              <span style={styles.totalLabel}>Total à Payer:</span>
-              <span style={styles.totalVal}>{totalAmount.toFixed(2)} MAD</span>
-            </div>
+            {transactionType === 'sale' ? (
+              <div style={styles.totalRow}>
+                <span style={styles.totalLabel}>Total à Payer:</span>
+                <span style={styles.totalVal}>{totalAmount.toFixed(2)} MAD</span>
+              </div>
+            ) : isAdmin ? (
+              <div style={styles.totalRow}>
+                <span style={styles.totalLabel}>Coût Total Achat:</span>
+                <span style={{ ...styles.totalVal, color: '#16a34a' }}>
+                  {cart.reduce((sum, item) => sum + item.quantity * (parseFloat(item.product.cost_price) || 0), 0).toFixed(2)} MAD
+                </span>
+              </div>
+            ) : (
+              <div style={styles.totalRow}>
+                <span style={styles.totalLabel}>Total Articles à Entrer:</span>
+                <span style={{ ...styles.totalVal, color: '#16a34a' }}>
+                  +{cart.reduce((sum, item) => sum + item.quantity, 0)} Unités
+                </span>
+              </div>
+            )}
 
             <div style={styles.cartActions}>
               <button
@@ -360,33 +391,51 @@ export default function PosPage() {
               <button
                 onClick={handleCheckout}
                 disabled={cart.length === 0 || processingSale || processingTx}
-                style={styles.checkoutBtn}
+                style={{
+                  ...styles.checkoutBtn,
+                  backgroundColor: transactionType === 'purchase' ? '#16a34a' : '#dc2626',
+                  borderColor: transactionType === 'purchase' ? '#16a34a' : '#dc2626',
+                }}
               >
                 <CheckCircle size={18} style={{ marginRight: '6px' }} />
-                <span>{processingSale || processingTx ? 'Validation...' : 'Valider la Vente'}</span>
+                <span>
+                  {processingSale || processingTx
+                    ? 'Validation...'
+                    : transactionType === 'purchase'
+                    ? "Valider l'Entrée de Stock"
+                    : 'Valider la Vente'}
+                </span>
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Completed Sale Receipt Modal */}
+      {/* Completed Sale / Stock Entry Receipt Modal */}
       <Modal
         isOpen={isReceiptOpen}
         onClose={() => setIsReceiptOpen(false)}
-        title="Vente Effectuée avec Succès"
+        title={lastCompletedTransaction?.type === 'purchase' ? "Entrée de Stock Effectuée" : "Vente Effectuée avec Succès"}
         maxWidth="450px"
       >
         <div style={styles.receiptContainer}>
           <div style={styles.receiptHeader}>
             <CheckCircle size={40} style={{ color: '#059669', marginBottom: '8px' }} />
-            <h3 style={{ margin: 0, fontSize: '18px', color: '#111827' }}>Encaissement Réussi</h3>
+            <h3 style={{ margin: 0, fontSize: '18px', color: '#111827' }}>
+              {lastCompletedTransaction?.type === 'purchase' ? "Stock Ajouté avec Succès" : "Encaissement Réussi"}
+            </h3>
             <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
-              Ticket de Caisse N° #{lastCompletedTransaction?.id}
+              Opération N° #{lastCompletedTransaction?.id}
             </div>
-            <div style={{ fontSize: '16px', fontWeight: '800', color: '#dc2626', marginTop: '6px' }}>
-              Total: {Number(lastCompletedTransaction?.total_amount || 0).toFixed(2)} MAD
-            </div>
+            {lastCompletedTransaction?.type === 'purchase' && !isAdmin ? (
+              <div style={{ fontSize: '15px', fontWeight: '700', color: '#16a34a', marginTop: '6px' }}>
+                +{lastCompletedTransaction?.items?.reduce((s, i) => s + (i.quantity || 0), 0) || 0} Unités Ajoutées au Stock
+              </div>
+            ) : (
+              <div style={{ fontSize: '16px', fontWeight: '800', color: lastCompletedTransaction?.type === 'purchase' ? '#16a34a' : '#dc2626', marginTop: '6px' }}>
+                Total: {Number(lastCompletedTransaction?.total_amount || 0).toFixed(2)} MAD
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', marginTop: '16px' }}>

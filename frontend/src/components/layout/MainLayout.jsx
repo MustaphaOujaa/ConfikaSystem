@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { selectCurrentToken } from '../../store/authSlice';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import { useRealtimeSync } from '../../utils/useRealtimeSync';
 
 export default function MainLayout() {
   const token = useSelector(selectCurrentToken);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { isConnected } = useRealtimeSync();
 
   if (!token) {
     return <Navigate to="/login" replace />;
@@ -14,10 +17,17 @@ export default function MainLayout() {
 
   return (
     <div style={styles.container}>
-      <Sidebar />
-      <div style={styles.mainWrapper}>
-        <Navbar />
-        <main style={styles.content}>
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+      />
+      
+      <div className="app-main-wrapper">
+        <Navbar 
+          onToggleSidebar={() => setIsSidebarOpen(prev => !prev)} 
+          isLiveConnected={isConnected}
+        />
+        <main className="app-content" style={styles.content}>
           <Outlet />
         </main>
       </div>
@@ -31,16 +41,11 @@ const styles = {
     minHeight: '100vh',
     backgroundColor: '#f9fafb',
     fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  },
-  mainWrapper: {
-    marginLeft: '260px',
-    flexGrow: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    minWidth: 0,
+    overflowX: 'hidden',
   },
   content: {
     padding: '24px',
     flexGrow: 1,
+    minWidth: 0,
   },
 };

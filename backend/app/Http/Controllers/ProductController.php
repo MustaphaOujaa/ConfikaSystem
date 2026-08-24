@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ProductCreated;
+use App\Events\ProductDeleted;
+use App\Events\ProductUpdated;
 use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,6 +33,12 @@ class ProductController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        if (! $request->user()?->isAdmin()) {
+            return response()->json([
+                'message' => 'Accès refusé. Seul un administrateur peut créer des produits.'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'category_id' => ['required', 'exists:categories,id'],
             'brand_id'    => ['nullable', 'exists:brands,id'],
@@ -71,7 +80,10 @@ class ProductController extends Controller
             ]);
         }
 
-        return response()->json($product->load(['category', 'brand', 'images']), 201);
+        $product->refresh()->load(['category', 'brand', 'images']);
+        event(new ProductCreated($product));
+
+        return response()->json($product, 201);
     }
 
     public function show(Product $product): JsonResponse
@@ -81,46 +93,74 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product): JsonResponse
     {
-        $validated = $request->validate([
-            'category_id' => ['sometimes', 'required', 'exists:categories,id'],
-            'brand_id'    => ['nullable', 'exists:brands,id'],
-            'name'        => ['sometimes', 'required', 'string', 'max:255'],
-            'barcode'     => ['sometimes', 'required', 'string', 'max:255', Rule::unique('products', 'barcode')->ignore($product)],
-            'description' => ['nullable', 'string'],
-            'cost_price'  => ['sometimes', 'nullable', 'numeric', 'min:0'],
-            'price'       => ['sometimes', 'required', 'numeric', 'min:0'],
-            'quantity'    => ['sometimes', 'required', 'integer', 'min:0'],
-            'image'       => ['nullable', 'image', 'max:5120'],
-            'image_url'   => ['nullable', 'string'],
-        ]);
+        $isAdmin = $request->user()?->isAdmin();
 
-        $product->update($validated);
-
-        // Update single main image if provided
-        $imagePath = null;
-        if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('products', 'public');
-            $imagePath = Storage::url($path);
-        } elseif (array_key_exists('image_url', $validated) && !empty($validated['image_url'])) {
-            $imagePath = $validated['image_url'];
-        }
-
-        if ($imagePath) {
-            // Replace existing image(s) with single main image
-            $product->images()->delete();
-            $product->images()->create([
-                'path'       => $imagePath,
-                'alt_text'   => $product->name,
-                'sort_order' => 1,
+        if ($isAdmin) {
+            // Admin: full update of all product fields
+            $validated = $request->validate([
+                'category_id' => ['sometimes', 'required', 'exists:categories,id'],
+                'brand_id'    => ['nullable', 'exists:brands,id'],
+                'name'        => ['sometimes', 'required', 'string', 'max:255'],
+                'barcode'     => ['sometimes', 'required', 'string', 'max:255', Rule::unique('products', 'barcode')->ignore($product)],
+                'description' => ['nullable', 'string'],
+                'cost_price'  => ['sometimes', 'nullable', 'numeric', 'min:0'],
+                'price'       => ['sometimes', 'required', 'numeric', 'min:0'],
+                'quantity'    => ['sometimes', 'required', 'integer', 'min:0'],
+                'image'       => ['nullable', 'image', 'max:5120'],
+                'image_url'   => ['nullable', 'string'],
             ]);
+
+            $product->update($validated);
+
+            // Update single main image if provided
+            $imagePath = null;
+            if ($request->hasFile('image')) {
+                $path = $request->file('image')->store('products', 'public');
+                $imagePath = Storage::url($path);
+            } elseif (array_key_exists('image_url', $validated) && !empty($validated['image_url'])) {
+                $imagePath = $validated['image_url'];
+            }
+
+            if ($imagePath) {
+                $product->images()->delete();
+                $product->images()->create([
+                    'path'       => $imagePath,
+                    'alt_text'   => $product->name,
+                    'sort_order' => 1,
+                ]);
+            }
+        } else {
+            // Caissier: can update product info and quantity, but NOT prices
+            $validated = $request->validate([
+                'category_id' => ['sometimes', 'required', 'exists:categories,id'],
+                'brand_id'    => ['nullable', 'exists:brands,id'],
+                'name'        => ['sometimes', 'required', 'string', 'max:255'],
+                'barcode'     => ['sometimes', 'required', 'string', 'max:255', Rule::unique('products', 'barcode')->ignore($product)],
+                'description' => ['nullable', 'string'],
+                'quantity'    => ['sometimes', 'required', 'integer', 'min:0'],
+                // price and cost_price are intentionally excluded — caissier cannot change pricing
+            ]);
+            $product->update($validated);
         }
 
-        return response()->json($product->load(['category', 'brand', 'images']));
+        $product->refresh()->load(['category', 'brand', 'images']);
+        event(new ProductUpdated($product));
+
+        return response()->json($product);
     }
 
-    public function destroy(Product $product): JsonResponse
+    public function destroy(Request $request, Product $product): JsonResponse
     {
+        if (! $request->user()?->isAdmin()) {
+            return response()->json([
+                'message' => 'Accès refusé. Seul un administrateur peut supprimer des produits.'
+            ], 403);
+        }
+
+        $productId = $product->id;
         $product->delete();
+
+        event(new ProductDeleted($productId));
 
         return response()->json(status: 204);
     }

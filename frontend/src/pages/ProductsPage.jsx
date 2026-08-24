@@ -9,6 +9,7 @@ import {
   TrendingUp,
   Barcode as BarcodeIcon
 } from 'lucide-react';
+import { useSelector } from 'react-redux';
 import { 
   useGetProductsQuery, 
   useGetCategoriesQuery, 
@@ -20,8 +21,12 @@ import {
 import Modal from '../components/common/Modal';
 import Pagination from '../components/common/Pagination';
 import BarcodeLabelModal from '../components/common/BarcodeLabelModal';
+import { selectCurrentUser } from '../store/authSlice';
 
 export default function ProductsPage() {
+  const user = useSelector(selectCurrentUser);
+  const isAdmin = user?.role === 'admin';
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -151,11 +156,14 @@ export default function ProductsPage() {
     payload.append('category_id', formData.category_id);
     if (formData.brand_id) payload.append('brand_id', formData.brand_id);
     payload.append('barcode', formData.barcode);
-    payload.append('cost_price', formData.cost_price || 0);
-    payload.append('price', formData.price);
     payload.append('quantity', formData.quantity);
     if (formData.description) payload.append('description', formData.description);
-    if (imageFile) payload.append('image', imageFile);
+    // Prices are only sent by admin — caissier cannot change them
+    if (isAdmin) {
+      payload.append('cost_price', formData.cost_price || 0);
+      payload.append('price', formData.price);
+      if (imageFile) payload.append('image', imageFile);
+    }
 
     try {
       await updateProduct({ id: editingProduct.id, formData: payload }).unwrap();
@@ -182,11 +190,12 @@ export default function ProductsPage() {
     return p - c;
   };
 
+
   return (
     <div style={styles.container}>
       {/* Top Toolbar */}
-      <div style={styles.toolbar}>
-        <div style={styles.searchGroup}>
+      <div className="responsive-toolbar" style={styles.toolbar}>
+        <div className="responsive-search-group" style={styles.searchGroup}>
           <div style={styles.inputWrapper}>
             <Search size={16} style={styles.searchIcon} />
             <input
@@ -209,14 +218,16 @@ export default function ProductsPage() {
           </select>
         </div>
 
-        <button onClick={handleOpenAdd} style={styles.addBtn}>
-          <Plus size={16} style={{ marginRight: '6px' }} />
-          <span>Nouveau Produit</span>
-        </button>
+        {isAdmin && (
+          <button onClick={handleOpenAdd} style={styles.addBtn}>
+            <Plus size={16} style={{ marginRight: '6px' }} />
+            <span>Nouveau Produit</span>
+          </button>
+        )}
       </div>
 
       {/* Products Table */}
-      <div style={styles.tableCard}>
+      <div className="responsive-table-container" style={styles.tableCard}>
         {loadingProducts ? (
           <div style={styles.loading}>Chargement de l'inventaire...</div>
         ) : fetchError ? (
@@ -232,9 +243,9 @@ export default function ProductsPage() {
                 <th style={styles.th}>Code-barres</th>
                 <th style={styles.th}>Catégorie</th>
                 <th style={styles.th}>Marque</th>
-                <th style={styles.th}>Prix d'Achat</th>
+                {isAdmin && <th style={styles.th}>Prix d'Achat</th>}
                 <th style={styles.th}>Prix de Vente</th>
-                <th style={styles.th}>Bénéfice Unitaire</th>
+                {isAdmin && <th style={styles.th}>Bénéfice Unitaire</th>}
                 <th style={styles.th}>Stock</th>
                 <th style={{ ...styles.th, textAlign: 'right' }}>Actions</th>
               </tr>
@@ -272,16 +283,18 @@ export default function ProductsPage() {
                     </td>
                     <td style={styles.td}>{p.category?.name || '—'}</td>
                     <td style={styles.td}>{p.brand?.name || '—'}</td>
-                    <td style={styles.td}>{Number(p.cost_price || 0).toFixed(2)} MAD</td>
+                    {isAdmin && <td style={styles.td}>{Number(p.cost_price || 0).toFixed(2)} MAD</td>}
                     <td style={{ ...styles.td, fontWeight: '700', color: '#111827' }}>
                       {Number(p.price).toFixed(2)} MAD
                     </td>
-                    <td style={styles.td}>
-                      <span style={{ ...styles.gainBadge, backgroundColor: gain >= 0 ? '#ecfdf5' : '#fef2f2', color: gain >= 0 ? '#059669' : '#dc2626' }}>
-                        <TrendingUp size={12} style={{ marginRight: '3px' }} />
-                        +{gain.toFixed(2)} MAD
-                      </span>
-                    </td>
+                    {isAdmin && (
+                      <td style={styles.td}>
+                        <span style={{ ...styles.gainBadge, backgroundColor: gain >= 0 ? '#ecfdf5' : '#fef2f2', color: gain >= 0 ? '#059669' : '#dc2626' }}>
+                          <TrendingUp size={12} style={{ marginRight: '3px' }} />
+                          +{gain.toFixed(2)} MAD
+                        </span>
+                      </td>
+                    )}
                     <td style={styles.td}>
                       <span style={isLowStock ? styles.stockBadgeLow : styles.stockBadgeNormal}>
                         {isLowStock && <AlertTriangle size={12} style={{ marginRight: '4px' }} />}
@@ -290,15 +303,20 @@ export default function ProductsPage() {
                     </td>
                     <td style={{ ...styles.td, textAlign: 'right' }}>
                       <div style={styles.actionGroup}>
+                        {/* Barcode label: visible to all */}
                         <button onClick={() => handleOpenBarcodeLabel(p)} style={styles.iconBtn} title="Imprimer l'étiquette code-barres">
                           <BarcodeIcon size={16} color="#4f46e5" />
                         </button>
+                        {/* Edit: visible to all (caissier sees info-only form, admin sees full form) */}
                         <button onClick={() => handleOpenEdit(p)} style={styles.iconBtn} title="Modifier le produit">
                           <Edit size={16} />
                         </button>
-                        <button onClick={() => handleDelete(p.id)} style={styles.deleteIconBtn} title="Supprimer le produit">
-                          <Trash2 size={16} />
-                        </button>
+                        {/* Delete: admin only */}
+                        {isAdmin && (
+                          <button onClick={() => handleDelete(p.id)} style={styles.deleteIconBtn} title="Supprimer le produit">
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -332,7 +350,7 @@ export default function ProductsPage() {
             />
           </div>
 
-          <div style={styles.formRow}>
+          <div className="responsive-form-row" style={styles.formRow}>
             <div style={{ ...styles.formGroup, flex: 1 }}>
               <label style={styles.label}>Code-barres / SKU *</label>
               <input
@@ -375,20 +393,22 @@ export default function ProductsPage() {
             </select>
           </div>
 
-          <div style={styles.formRow}>
-            <div style={{ ...styles.formGroup, flex: 1 }}>
-              <label style={styles.label}>Prix d'Achat (Original Cost) *</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                required
-                value={formData.cost_price}
-                onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })}
-                placeholder="ex: 150.00"
-                style={styles.input}
-              />
-            </div>
+          <div className="responsive-form-row" style={styles.formRow}>
+            {isAdmin && (
+              <div style={{ ...styles.formGroup, flex: 1 }}>
+                <label style={styles.label}>Prix d'Achat (Coût) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required
+                  value={formData.cost_price}
+                  onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })}
+                  placeholder="ex: 150.00"
+                  style={styles.input}
+                />
+              </div>
+            )}
             <div style={{ ...styles.formGroup, flex: 1 }}>
               <label style={styles.label}>Prix de Vente *</label>
               <input
@@ -404,15 +424,17 @@ export default function ProductsPage() {
             </div>
           </div>
 
-          {/* Unit Gain Preview */}
-          <div style={styles.gainCalcBox}>
-            Bénéfice Unitaire Estimé (Gain):{' '}
-            <strong style={{ color: '#059669' }}>
-              +{calculateGain(formData.price, formData.cost_price).toFixed(2)} MAD
-            </strong>
-          </div>
+          {/* Unit Gain Preview for Admin */}
+          {isAdmin && (
+            <div style={styles.gainCalcBox}>
+              Bénéfice Unitaire Estimé (Gain):{' '}
+              <strong style={{ color: '#059669' }}>
+                +{calculateGain(formData.price, formData.cost_price).toFixed(2)} MAD
+              </strong>
+            </div>
+          )}
 
-          <div style={styles.formRow}>
+          <div className="responsive-form-row" style={styles.formRow}>
             <div style={{ ...styles.formGroup, flex: 1 }}>
               <label style={styles.label}>Quantité Stock Initial *</label>
               <input
@@ -429,7 +451,7 @@ export default function ProductsPage() {
 
           {/* Direct File Image Selector */}
           <div style={styles.formGroup}>
-            <label style={styles.label}>Image du produit (Import direct optionnel)</label>
+            <label style={styles.label}>Photo du produit (Appareil photo ou Galerie)</label>
             <input
               type="file"
               accept="image/*"
@@ -478,7 +500,7 @@ export default function ProductsPage() {
             />
           </div>
 
-          <div style={styles.formRow}>
+          <div className="responsive-form-row" style={styles.formRow}>
             <div style={{ ...styles.formGroup, flex: 1 }}>
               <label style={styles.label}>Code-barres *</label>
               <input
@@ -519,41 +541,69 @@ export default function ProductsPage() {
             </select>
           </div>
 
-          <div style={styles.formRow}>
-            <div style={{ ...styles.formGroup, flex: 1 }}>
-              <label style={styles.label}>Prix d'Achat (Original Cost) *</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                required
-                value={formData.cost_price}
-                onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })}
-                style={styles.input}
-              />
-            </div>
-            <div style={{ ...styles.formGroup, flex: 1 }}>
-              <label style={styles.label}>Prix de Vente *</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                required
-                value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                style={styles.input}
-              />
-            </div>
-          </div>
+          {isAdmin ? (
+            <>
+              <div className="responsive-form-row" style={styles.formRow}>
+                <div style={{ ...styles.formGroup, flex: 1 }}>
+                  <label style={styles.label}>Prix d'Achat (Coût) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={formData.cost_price}
+                    onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })}
+                    style={styles.input}
+                  />
+                </div>
+                <div style={{ ...styles.formGroup, flex: 1 }}>
+                  <label style={styles.label}>Prix de Vente *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    style={styles.input}
+                  />
+                </div>
+              </div>
 
-          <div style={styles.gainCalcBox}>
-            Bénéfice Unitaire Estimé (Gain):{' '}
-            <strong style={{ color: '#059669' }}>
-              +{calculateGain(formData.price, formData.cost_price).toFixed(2)} MAD
-            </strong>
-          </div>
+              <div style={styles.gainCalcBox}>
+                Bénéfice Unitaire Estimé (Gain):{' '}
+                <strong style={{ color: '#059669' }}>
+                  +{calculateGain(formData.price, formData.cost_price).toFixed(2)} MAD
+                </strong>
+              </div>
 
-          <div style={styles.formRow}>
+              {/* Image upload: admin only */}
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Changer l'image du produit (Import direct optionnel)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  style={styles.fileInput}
+                />
+                {imagePreview && (
+                  <div style={styles.previewBox}>
+                    <img src={imagePreview} alt="Aperçu" style={styles.previewImg} />
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* Caissier: show selling price as read-only info — cannot change it */
+            <div style={{ padding: '10px 14px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e5e7eb', marginBottom: '8px' }}>
+              <span style={{ fontSize: '13px', color: '#6b7280' }}>Prix de vente (non modifiable) : </span>
+              <strong style={{ color: '#111827', fontSize: '14px' }}>
+                {Number(formData.price || 0).toFixed(2)} MAD
+              </strong>
+            </div>
+          )}
+
+          <div className="responsive-form-row" style={styles.formRow}>
             <div style={{ ...styles.formGroup, flex: 1 }}>
               <label style={styles.label}>Quantité en Stock *</label>
               <input
@@ -565,22 +615,6 @@ export default function ProductsPage() {
                 style={styles.input}
               />
             </div>
-          </div>
-
-          {/* Direct File Image Selector */}
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Changer l'image du produit (Import direct optionnel)</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              style={styles.fileInput}
-            />
-            {imagePreview && (
-              <div style={styles.previewBox}>
-                <img src={imagePreview} alt="Aperçu" style={styles.previewImg} />
-              </div>
-            )}
           </div>
 
           <div style={styles.formGroup}>
@@ -602,6 +636,7 @@ export default function ProductsPage() {
         </form>
       </Modal>
 
+
       {/* Barcode Label Printing Modal */}
       <BarcodeLabelModal
         isOpen={isLabelModalOpen}
@@ -611,6 +646,7 @@ export default function ProductsPage() {
         }}
         product={selectedLabelProduct}
       />
+
     </div>
   );
 }
@@ -656,12 +692,17 @@ const styles = {
     boxSizing: 'border-box',
   },
   selectFilter: {
-    padding: '9px 14px',
-    fontSize: '14px',
+    height: '38px',
+    padding: '8px 12px',
+    fontSize: '13px',
     border: '1px solid #d1d5db',
     borderRadius: '6px',
     backgroundColor: '#ffffff',
     color: '#374151',
+    cursor: 'pointer',
+    outline: 'none',
+    minWidth: '160px',
+    maxWidth: '220px',
   },
   addBtn: {
     display: 'inline-flex',
