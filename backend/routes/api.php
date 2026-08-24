@@ -8,10 +8,14 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProductImageController;
 use App\Http\Controllers\ScannerController;
+use App\Http\Controllers\ReportController;
 
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
+    // Reports endpoint
+    Route::get('/reports/daily', [ReportController::class, 'daily']);
+
     // Low-stock notifications endpoint
     Route::get('/products/low-stock', [ProductController::class, 'lowStockAlerts']);
 
