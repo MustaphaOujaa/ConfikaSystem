@@ -210,18 +210,12 @@ export default function PosPage() {
       {/* Left Column: Unified Search & Catalog */}
       <div style={styles.leftCol}>
         <div style={{ ...styles.card, flexGrow: 1 }}>
-          {/* Card Header with Scanner Ready indicator */}
-          <div style={{ ...styles.cardHeader, justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <Package size={18} style={{ color: '#2563eb', marginRight: '8px' }} />
-              <span style={styles.cardTitle}>
-                Catalogue des Produits ({filteredCatalog.length} Articles)
-              </span>
-            </div>
-            <div style={styles.scannerBadge}>
-              <Barcode size={15} style={{ marginRight: '5px' }} />
-              <span>Scanner USB Prêt</span>
-            </div>
+          {/* Card Header */}
+          <div style={styles.cardHeader}>
+            <Package size={18} style={{ color: '#2563eb', marginRight: '8px' }} />
+            <span style={styles.cardTitle}>
+              Catalogue des Produits ({filteredCatalog.length} Articles)
+            </span>
           </div>
 
           <div style={styles.cardBody}>
@@ -468,17 +462,6 @@ const styles = {
     gap: '12px',
     flex: '1',
     minHeight: 0,
-  },
-  scannerBadge: {
-    display: 'flex',
-    alignItems: 'center',
-    fontSize: '12px',
-    fontWeight: '600',
-    color: '#059669',
-    backgroundColor: '#ecfdf5',
-    padding: '4px 10px',
-    borderRadius: '16px',
-    border: '1px solid #a7f3d0',
   },
   manualSearchWrapper: {
     position: 'relative',
