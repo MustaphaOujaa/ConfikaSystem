@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['category_id', 'name', 'barcode', 'description', 'price', 'quantity'])]
+#[Fillable(['category_id', 'brand_id', 'name', 'barcode', 'description', 'cost_price', 'price', 'quantity'])]
 class Product extends Model
 {
     use HasFactory;
@@ -20,6 +20,11 @@ class Product extends Model
         return $this->belongsTo(Category::class);
     }
 
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
+    }
+
     public function images(): HasMany
     {
         return $this->hasMany(ProductImage::class);
@@ -28,6 +33,7 @@ class Product extends Model
     protected function casts(): array
     {
         return [
+            'cost_price' => 'decimal:2',
             'price' => 'decimal:2',
             'quantity' => 'integer',
         ];
