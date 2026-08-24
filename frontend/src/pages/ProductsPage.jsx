@@ -6,7 +6,8 @@ import {
   Trash2, 
   Package, 
   AlertTriangle,
-  TrendingUp 
+  TrendingUp,
+  Barcode as BarcodeIcon
 } from 'lucide-react';
 import { 
   useGetProductsQuery, 
@@ -18,6 +19,7 @@ import {
 } from '../api/apiSlice';
 import Modal from '../components/common/Modal';
 import Pagination from '../components/common/Pagination';
+import BarcodeLabelModal from '../components/common/BarcodeLabelModal';
 
 export default function ProductsPage() {
   const [page, setPage] = useState(1);
@@ -27,6 +29,8 @@ export default function ProductsPage() {
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
+  const [selectedLabelProduct, setSelectedLabelProduct] = useState(null);
 
   // Form states
   const emptyForm = { 
@@ -107,6 +111,11 @@ export default function ProductsPage() {
     setImagePreview(existingImg);
     setFormError('');
     setIsEditModalOpen(true);
+  };
+
+  const handleOpenBarcodeLabel = (product) => {
+    setSelectedLabelProduct(product);
+    setIsLabelModalOpen(true);
   };
 
   const handleCreateSubmit = async (e) => {
@@ -281,6 +290,9 @@ export default function ProductsPage() {
                     </td>
                     <td style={{ ...styles.td, textAlign: 'right' }}>
                       <div style={styles.actionGroup}>
+                        <button onClick={() => handleOpenBarcodeLabel(p)} style={styles.iconBtn} title="Imprimer l'étiquette code-barres">
+                          <BarcodeIcon size={16} color="#4f46e5" />
+                        </button>
                         <button onClick={() => handleOpenEdit(p)} style={styles.iconBtn} title="Modifier le produit">
                           <Edit size={16} />
                         </button>
@@ -589,6 +601,16 @@ export default function ProductsPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Barcode Label Printing Modal */}
+      <BarcodeLabelModal
+        isOpen={isLabelModalOpen}
+        onClose={() => {
+          setIsLabelModalOpen(false);
+          setSelectedLabelProduct(null);
+        }}
+        product={selectedLabelProduct}
+      />
     </div>
   );
 }

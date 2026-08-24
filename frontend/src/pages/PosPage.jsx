@@ -18,17 +18,15 @@ import {
   useCreateTransactionMutation 
 } from '../api/apiSlice';
 import Modal from '../components/common/Modal';
+import { playSuccessBeep, playErrorBeep } from '../utils/audio';
 
 export default function PosPage() {
-  const [barcodeInput, setBarcodeInput] = useState('');
   const [catalogSearch, setCatalogSearch] = useState('');
   const [cart, setCart] = useState([]);
   const [transactionType, setTransactionType] = useState('sale'); // 'sale' | 'purchase'
   const [scanError, setScanError] = useState('');
   const [lastCompletedTransaction, setLastCompletedTransaction] = useState(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
-
-  const barcodeRef = useRef(null);
 
   // RTK Query hooks
   const { data: productsData } = useGetProductsQuery({ page: 1 });
@@ -49,25 +47,80 @@ export default function PosPage() {
   });
 
   useEffect(() => {
-    barcodeRef.current?.focus();
-  }, []);
+    // Global USB barcode scanner keystroke listener
+    let buffer = '';
+    let lastKeyTime = Date.now();
 
-  const handleScanBarcode = async (e) => {
+    const handleGlobalKeyDown = async (e) => {
+      const currentTime = Date.now();
+      const interval = currentTime - lastKeyTime;
+      const char = e.key;
+
+      // Reset buffer if delay between keystrokes exceeds 120ms (manual typing vs scanner burst)
+      if (interval > 120) {
+        buffer = '';
+      }
+      lastKeyTime = currentTime;
+
+      if (char === 'Enter') {
+        const code = buffer.trim();
+        if (code.length >= 2) {
+          e.preventDefault();
+          buffer = '';
+          setScanError('');
+          try {
+            const product = await fetchProductByBarcode(code).unwrap();
+            addToCart(product);
+            playSuccessBeep();
+            setCatalogSearch('');
+          } catch (err) {
+            playErrorBeep();
+            setScanError(`Code-barres "${code}" introuvable.`);
+          }
+        }
+      } else if (char.length === 1) {
+        buffer += char;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [fetchProductByBarcode]);
+
+  const handleManualSearchSubmit = async (e) => {
     e.preventDefault();
-    if (!barcodeInput.trim()) return;
+    if (!catalogSearch.trim()) return;
 
     setScanError('');
-    const code = barcodeInput.trim();
+    const query = catalogSearch.trim();
+
+    // Check loaded products first
+    const exactMatch = allProducts.find(
+      (p) => p.barcode === query || p.name.toLowerCase() === query.toLowerCase()
+    );
+
+    if (exactMatch) {
+      addToCart(exactMatch);
+      playSuccessBeep();
+      setCatalogSearch('');
+      return;
+    }
+
+    if (filteredCatalog.length === 1) {
+      addToCart(filteredCatalog[0]);
+      playSuccessBeep();
+      setCatalogSearch('');
+      return;
+    }
 
     try {
-      const product = await fetchProductByBarcode(code).unwrap();
+      const product = await fetchProductByBarcode(query).unwrap();
       addToCart(product);
-      setBarcodeInput('');
+      playSuccessBeep();
+      setCatalogSearch('');
     } catch (err) {
-      console.error(err);
-      setScanError(`Produit avec code-barres "${code}" introuvable.`);
-    } finally {
-      barcodeRef.current?.focus();
+      playErrorBeep();
+      setScanError(`Aucun produit trouvé pour "${query}".`);
     }
   };
 
@@ -143,6 +196,7 @@ export default function PosPage() {
       setIsReceiptOpen(true);
       clearCart();
     } catch (err) {
+      playErrorBeep();
       setScanError(err?.data?.message || err?.message || 'Échec de la validation. Vérifiez le stock disponible.');
     }
   };
@@ -153,90 +207,71 @@ export default function PosPage() {
 
   return (
     <div style={styles.container}>
-      {/* Left Column: Barcode Scanner & Live Normal Search Catalog */}
+      {/* Left Column: Unified Search & Catalog */}
       <div style={styles.leftCol}>
-        {/* Scanner & Manual Search Box */}
-        <div style={styles.card}>
-          <div style={styles.cardHeader}>
-            <Barcode size={20} style={{ color: '#dc2626', marginRight: '8px' }} />
-            <span style={styles.cardTitle}>Scanner & Barre de Recherche Produit</span>
+        <div style={{ ...styles.card, flexGrow: 1 }}>
+          {/* Card Header with Scanner Ready indicator */}
+          <div style={{ ...styles.cardHeader, justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <Package size={18} style={{ color: '#2563eb', marginRight: '8px' }} />
+              <span style={styles.cardTitle}>
+                Catalogue des Produits ({filteredCatalog.length} Articles)
+              </span>
+            </div>
+            <div style={styles.scannerBadge}>
+              <Barcode size={15} style={{ marginRight: '5px' }} />
+              <span>Scanner USB Prêt</span>
+            </div>
           </div>
 
           <div style={styles.cardBody}>
-            {/* Barcode Quick Scanner Form */}
-            <form onSubmit={handleScanBarcode} style={styles.scanForm}>
-              <div style={styles.scanInputWrapper}>
-                <Barcode size={18} style={styles.scanIcon} />
-                <input
-                  ref={barcodeRef}
-                  type="text"
-                  placeholder="Scanner le code-barres USB..."
-                  value={barcodeInput}
-                  onChange={(e) => setBarcodeInput(e.target.value)}
-                  style={styles.scanInput}
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={searchingBarcode}
-                style={styles.scanBtn}
-              >
-                {searchingBarcode ? 'Recherche...' : 'Scanner / Ajouter'}
-              </button>
-            </form>
-
-            {/* Normal Manual Search Bar */}
-            <div style={styles.manualSearchWrapper}>
-              <Search size={16} style={styles.manualSearchIcon} />
+            {/* Search Bar (Auto-filters + Enter to add) */}
+            <form onSubmit={handleManualSearchSubmit} style={styles.manualSearchWrapper}>
+              <Search size={18} style={styles.manualSearchIcon} />
               <input
                 type="text"
-                placeholder="Rechercher un produit par nom, catégorie ou code..."
+                placeholder="Rechercher un produit (nom, code-barres, catégorie)..."
                 value={catalogSearch}
                 onChange={(e) => setCatalogSearch(e.target.value)}
                 style={styles.manualSearchInput}
+                autoFocus
               />
               {catalogSearch && (
-                <button onClick={() => setCatalogSearch('')} style={styles.clearSearchBtn}>
+                <button type="button" onClick={() => setCatalogSearch('')} style={styles.clearSearchBtn}>
                   <X size={14} />
                 </button>
               )}
-            </div>
+            </form>
 
             {scanError && <div style={styles.errorBanner}>{scanError}</div>}
-          </div>
-        </div>
 
-        {/* Live Filtered Catalog Picker */}
-        <div style={{ ...styles.card, flexGrow: 1 }}>
-          <div style={styles.cardHeader}>
-            <Package size={18} style={{ color: '#2563eb', marginRight: '8px' }} />
-            <span style={styles.cardTitle}>
-              Catalogue des Produits ({filteredCatalog.length} Articles)
-            </span>
-          </div>
-
-          <div style={styles.catalogGrid}>
-            {filteredCatalog.length === 0 ? (
-              <div style={{ gridColumn: '1 / -1', padding: '20px', textAlign: 'center', color: '#6b7280' }}>
-                Aucun produit correspondant à "{catalogSearch}".
-              </div>
-            ) : (
-              filteredCatalog.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => addToCart(p)}
-                  style={styles.catalogItem}
-                >
-                  <div style={styles.itemTitle}>{p.name}</div>
-                  <div style={styles.itemMeta}>
-                    <span>{Number(p.price).toFixed(2)} MAD</span>
-                    <span style={{ color: p.quantity <= 5 ? '#dc2626' : '#6b7280' }}>
-                      Stock: {p.quantity}
-                    </span>
-                  </div>
-                </button>
-              ))
-            )}
+            {/* Live Filtered Catalog Grid */}
+            <div style={styles.catalogGrid}>
+              {filteredCatalog.length === 0 ? (
+                <div style={{ gridColumn: '1 / -1', padding: '30px', textAlign: 'center', color: '#6b7280' }}>
+                  Aucun produit correspondant à "{catalogSearch}".
+                </div>
+              ) : (
+                filteredCatalog.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      addToCart(p);
+                      playSuccessBeep();
+                    }}
+                    style={styles.catalogItem}
+                  >
+                    <div style={styles.itemTitle}>{p.name}</div>
+                    <div style={styles.itemMeta}>
+                      <span>{Number(p.price).toFixed(2)} MAD</span>
+                      <span style={{ color: p.quantity <= 5 ? '#dc2626' : '#6b7280' }}>
+                        Stock: {p.quantity}
+                      </span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -431,42 +466,19 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
+    flex: '1',
+    minHeight: 0,
   },
-  scanForm: {
+  scannerBadge: {
     display: 'flex',
-    gap: '10px',
-  },
-  scanInputWrapper: {
-    position: 'relative',
-    flexGrow: 1,
-  },
-  scanIcon: {
-    position: 'absolute',
-    left: '12px',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    color: '#dc2626',
-  },
-  scanInput: {
-    width: '100%',
-    padding: '10px 12px 10px 38px',
-    fontSize: '15px',
+    alignItems: 'center',
+    fontSize: '12px',
     fontWeight: '600',
-    border: '2px solid #dc2626',
-    borderRadius: '6px',
-    outline: 'none',
-    boxSizing: 'border-box',
-  },
-  scanBtn: {
-    padding: '10px 18px',
-    backgroundColor: '#dc2626',
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
+    color: '#059669',
+    backgroundColor: '#ecfdf5',
+    padding: '4px 10px',
+    borderRadius: '16px',
+    border: '1px solid #a7f3d0',
   },
   manualSearchWrapper: {
     position: 'relative',
