@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
   Search, 
@@ -21,6 +21,7 @@ import {
 import Modal from '../components/common/Modal';
 import Pagination from '../components/common/Pagination';
 import BarcodeLabelModal from '../components/common/BarcodeLabelModal';
+import { playSuccessBeep } from '../utils/audio';
 import { selectCurrentUser } from '../store/authSlice';
 
 export default function ProductsPage() {
@@ -87,6 +88,41 @@ export default function ProductsPage() {
       setImagePreview(URL.createObjectURL(file));
     }
   };
+
+  // USB Barcode Scanner keystroke capture when Add or Edit modal is open
+  useEffect(() => {
+    if (!isAddModalOpen && !isEditModalOpen) return;
+
+    let buffer = '';
+    let lastKeyTime = Date.now();
+
+    const handleScannerKeyDown = (e) => {
+      const currentTime = Date.now();
+      const interval = currentTime - lastKeyTime;
+      const char = e.key;
+
+      if (interval > 120) {
+        buffer = '';
+      }
+      lastKeyTime = currentTime;
+
+      if (char === 'Enter') {
+        const code = buffer.trim();
+        if (code.length >= 2) {
+          e.preventDefault();
+          e.stopPropagation();
+          setFormData((prev) => ({ ...prev, barcode: code }));
+          playSuccessBeep();
+          buffer = '';
+        }
+      } else if (char.length === 1) {
+        buffer += char;
+      }
+    };
+
+    window.addEventListener('keydown', handleScannerKeyDown, true);
+    return () => window.removeEventListener('keydown', handleScannerKeyDown, true);
+  }, [isAddModalOpen, isEditModalOpen]);
 
   const handleOpenAdd = () => {
     setFormData({
@@ -158,11 +194,11 @@ export default function ProductsPage() {
     payload.append('barcode', formData.barcode);
     payload.append('quantity', formData.quantity);
     if (formData.description) payload.append('description', formData.description);
+    if (imageFile) payload.append('image', imageFile);
     // Prices are only sent by admin — caissier cannot change them
     if (isAdmin) {
       payload.append('cost_price', formData.cost_price || 0);
       payload.append('price', formData.price);
-      if (imageFile) payload.append('image', imageFile);
     }
 
     try {
@@ -352,7 +388,7 @@ export default function ProductsPage() {
 
           <div className="responsive-form-row" style={styles.formRow}>
             <div style={{ ...styles.formGroup, flex: 1 }}>
-              <label style={styles.label}>Code-barres / SKU *</label>
+              <label style={styles.label}>Code-barres / SKU * (Scanner USB actif)</label>
               <input
                 type="text"
                 required
@@ -502,7 +538,7 @@ export default function ProductsPage() {
 
           <div className="responsive-form-row" style={styles.formRow}>
             <div style={{ ...styles.formGroup, flex: 1 }}>
-              <label style={styles.label}>Code-barres *</label>
+              <label style={styles.label}>Code-barres * (Scanner USB actif)</label>
               <input
                 type="text"
                 required
@@ -576,22 +612,6 @@ export default function ProductsPage() {
                   +{calculateGain(formData.price, formData.cost_price).toFixed(2)} MAD
                 </strong>
               </div>
-
-              {/* Image upload: admin only */}
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Changer l'image du produit (Import direct optionnel)</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  style={styles.fileInput}
-                />
-                {imagePreview && (
-                  <div style={styles.previewBox}>
-                    <img src={imagePreview} alt="Aperçu" style={styles.previewImg} />
-                  </div>
-                )}
-              </div>
             </>
           ) : (
             /* Caissier: show selling price as read-only info — cannot change it */
@@ -602,6 +622,22 @@ export default function ProductsPage() {
               </strong>
             </div>
           )}
+
+          {/* Image upload: available for both admin and caissier */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Changer l'image du produit (Import direct optionnel)</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              style={styles.fileInput}
+            />
+            {imagePreview && (
+              <div style={styles.previewBox}>
+                <img src={imagePreview} alt="Aperçu" style={styles.previewImg} />
+              </div>
+            )}
+          </div>
 
           <div className="responsive-form-row" style={styles.formRow}>
             <div style={{ ...styles.formGroup, flex: 1 }}>

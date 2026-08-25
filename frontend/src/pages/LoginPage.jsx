@@ -19,7 +19,11 @@ export default function LoginPage() {
     try {
       const result = await login({ name, password }).unwrap();
       dispatch(setCredentials({ user: result.user, token: result.token }));
-      navigate('/');
+      if (result.user?.role === 'admin') {
+        navigate('/');
+      } else {
+        navigate('/pos');
+      }
     } catch (err) {
       if (err?.data?.message) {
         setErrorMessage(err.data.message);

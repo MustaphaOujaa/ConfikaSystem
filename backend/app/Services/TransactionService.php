@@ -24,7 +24,7 @@ class TransactionService
                 $product = Product::whereKey($item['product_id'])->lockForUpdate()->firstOrFail();
 
                 // Auto-resolve unit price: for purchase use cost_price; for sale use price
-                if (isset($item['unit_price']) && is_numeric($item['unit_price']) && $item['unit_price'] > 0) {
+                if (isset($item['unit_price']) && is_numeric($item['unit_price']) && (float) $item['unit_price'] >= 0) {
                     $unitPrice = (float) $item['unit_price'];
                 } else {
                     $unitPrice = $data['type'] === 'purchase'

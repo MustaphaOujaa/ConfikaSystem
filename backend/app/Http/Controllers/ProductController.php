@@ -111,26 +111,8 @@ class ProductController extends Controller
             ]);
 
             $product->update($validated);
-
-            // Update single main image if provided
-            $imagePath = null;
-            if ($request->hasFile('image')) {
-                $path = $request->file('image')->store('products', 'public');
-                $imagePath = Storage::url($path);
-            } elseif (array_key_exists('image_url', $validated) && !empty($validated['image_url'])) {
-                $imagePath = $validated['image_url'];
-            }
-
-            if ($imagePath) {
-                $product->images()->delete();
-                $product->images()->create([
-                    'path'       => $imagePath,
-                    'alt_text'   => $product->name,
-                    'sort_order' => 1,
-                ]);
-            }
         } else {
-            // Caissier: can update product info and quantity, but NOT prices
+            // Caissier: can update product info, quantity, and image, but NOT prices
             $validated = $request->validate([
                 'category_id' => ['sometimes', 'required', 'exists:categories,id'],
                 'brand_id'    => ['nullable', 'exists:brands,id'],
@@ -138,9 +120,30 @@ class ProductController extends Controller
                 'barcode'     => ['sometimes', 'required', 'string', 'max:255', Rule::unique('products', 'barcode')->ignore($product)],
                 'description' => ['nullable', 'string'],
                 'quantity'    => ['sometimes', 'required', 'integer', 'min:0'],
+                'image'       => ['nullable', 'image', 'max:5120'],
+                'image_url'   => ['nullable', 'string'],
                 // price and cost_price are intentionally excluded — caissier cannot change pricing
             ]);
+
             $product->update($validated);
+        }
+
+        // Update single main image if provided (Admin or Caissier)
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('products', 'public');
+            $imagePath = Storage::url($path);
+        } elseif (array_key_exists('image_url', $validated) && !empty($validated['image_url'])) {
+            $imagePath = $validated['image_url'];
+        }
+
+        if ($imagePath) {
+            $product->images()->delete();
+            $product->images()->create([
+                'path'       => $imagePath,
+                'alt_text'   => $product->name,
+                'sort_order' => 1,
+            ]);
         }
 
         $product->refresh()->load(['category', 'brand', 'images']);

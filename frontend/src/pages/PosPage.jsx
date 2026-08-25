@@ -9,7 +9,10 @@ import {
   Package,
   Search,
   Printer,
-  X
+  X,
+  Edit3,
+  AlertTriangle,
+  ArrowRight
 } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { 
@@ -32,6 +35,7 @@ export default function PosPage() {
   const [scanError, setScanError] = useState('');
   const [lastCompletedTransaction, setLastCompletedTransaction] = useState(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [isConfirmSaleModalOpen, setIsConfirmSaleModalOpen] = useState(false);
 
   // RTK Query hooks
   const { data: productsData } = useGetProductsQuery({ page: 1 });
@@ -40,6 +44,15 @@ export default function PosPage() {
   const [createTransaction, { isLoading: processingTx }] = useCreateTransactionMutation();
 
   const allProducts = productsData?.data || [];
+
+  // Calculate live front-end stock for any product based on current cart
+  const getLiveStock = (product) => {
+    const inCart = cart.find((item) => item.product.id === product.id)?.quantity || 0;
+    if (transactionType === 'sale') {
+      return Math.max(0, (product.quantity || 0) - inCart);
+    }
+    return (product.quantity || 0) + inCart;
+  };
 
   const filteredCatalog = allProducts.filter((p) => {
     if (!catalogSearch.trim()) return true;
@@ -57,6 +70,9 @@ export default function PosPage() {
     let lastKeyTime = Date.now();
 
     const handleGlobalKeyDown = async (e) => {
+      // Don't intercept when user is typing inside modal inputs
+      if (isConfirmSaleModalOpen || isReceiptOpen) return;
+
       const currentTime = Date.now();
       const interval = currentTime - lastKeyTime;
       const char = e.key;
@@ -76,7 +92,6 @@ export default function PosPage() {
           try {
             const product = await fetchProductByBarcode(code).unwrap();
             addToCart(product);
-            playSuccessBeep();
             setCatalogSearch('');
           } catch (err) {
             playErrorBeep();
@@ -90,7 +105,7 @@ export default function PosPage() {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [fetchProductByBarcode]);
+  }, [fetchProductByBarcode, cart, transactionType, isConfirmSaleModalOpen, isReceiptOpen]);
 
   const handleManualSearchSubmit = async (e) => {
     e.preventDefault();
@@ -106,14 +121,12 @@ export default function PosPage() {
 
     if (exactMatch) {
       addToCart(exactMatch);
-      playSuccessBeep();
       setCatalogSearch('');
       return;
     }
 
     if (filteredCatalog.length === 1) {
       addToCart(filteredCatalog[0]);
-      playSuccessBeep();
       setCatalogSearch('');
       return;
     }
@@ -121,7 +134,6 @@ export default function PosPage() {
     try {
       const product = await fetchProductByBarcode(query).unwrap();
       addToCart(product);
-      playSuccessBeep();
       setCatalogSearch('');
     } catch (err) {
       playErrorBeep();
@@ -130,8 +142,20 @@ export default function PosPage() {
   };
 
   const addToCart = (product) => {
+    setScanError('');
+    const existing = cart.find((item) => item.product.id === product.id);
+    const currentQty = existing ? existing.quantity : 0;
+
+    // Check live stock limit for sales
+    if (transactionType === 'sale' && currentQty + 1 > (product.quantity || 0)) {
+      playErrorBeep();
+      setScanError(`Stock insuffisant pour "${product.name}". Disponible : ${product.quantity}.`);
+      return;
+    }
+
+    playSuccessBeep();
+
     setCart((prevCart) => {
-      const existing = prevCart.find((item) => item.product.id === product.id);
       if (existing) {
         return prevCart.map((item) =>
           item.product.id === product.id
@@ -139,21 +163,47 @@ export default function PosPage() {
             : item
         );
       }
-      return [...prevCart, { product, quantity: 1, unit_price: parseFloat(product.price) }];
+      return [
+        ...prevCart,
+        {
+          product,
+          quantity: 1,
+          unit_price: parseFloat(product.price) || 0,
+        },
+      ];
     });
   };
 
   const updateQuantity = (productId, delta) => {
+    setScanError('');
+    setCart((prevCart) => {
+      const target = prevCart.find((item) => item.product.id === productId);
+      if (!target) return prevCart;
+
+      const newQty = target.quantity + delta;
+      if (newQty <= 0) {
+        return prevCart.filter((item) => item.product.id !== productId);
+      }
+
+      // Check stock limit for sales
+      if (delta > 0 && transactionType === 'sale' && newQty > (target.product.quantity || 0)) {
+        playErrorBeep();
+        setScanError(`Stock maximum disponible atteint pour "${target.product.name}" (${target.product.quantity} max).`);
+        return prevCart;
+      }
+
+      return prevCart.map((item) =>
+        item.product.id === productId ? { ...item, quantity: newQty } : item
+      );
+    });
+  };
+
+  const updateUnitPrice = (productId, newPrice) => {
+    const parsed = Math.max(0, parseFloat(newPrice) || 0);
     setCart((prevCart) =>
-      prevCart
-        .map((item) => {
-          if (item.product.id === productId) {
-            const newQty = item.quantity + delta;
-            return newQty > 0 ? { ...item, quantity: newQty } : null;
-          }
-          return item;
-        })
-        .filter(Boolean)
+      prevCart.map((item) =>
+        item.product.id === productId ? { ...item, unit_price: parsed } : item
+      )
     );
   };
 
@@ -171,7 +221,20 @@ export default function PosPage() {
     0
   );
 
-  const handleCheckout = async () => {
+  const handleOpenCheckoutConfirmation = () => {
+    if (cart.length === 0) return;
+    setScanError('');
+
+    if (transactionType === 'sale') {
+      // Open dynamic price confirmation modal to allow cashier review/edit
+      setIsConfirmSaleModalOpen(true);
+    } else {
+      // Purchase directly proceeds
+      handleExecuteCheckout();
+    }
+  };
+
+  const handleExecuteCheckout = async () => {
     if (cart.length === 0) return;
     setScanError('');
 
@@ -182,11 +245,12 @@ export default function PosPage() {
           items: cart.map((item) => ({
             barcode: item.product.barcode,
             quantity: item.quantity,
+            unit_price: item.unit_price,
           })),
         };
         result = await processScannerSale(payload).unwrap();
       } else {
-        // Purchase (Entrée de stock): Backend calculates the cost from product cost_price automatically
+        // Purchase (Entrée de stock)
         const payload = {
           type: 'purchase',
           items: cart.map((item) => ({
@@ -197,6 +261,7 @@ export default function PosPage() {
         result = await createTransaction(payload).unwrap();
       }
 
+      setIsConfirmSaleModalOpen(false);
       setLastCompletedTransaction(result.transaction || result);
       setIsReceiptOpen(true);
       clearCart();
@@ -212,7 +277,7 @@ export default function PosPage() {
 
   return (
     <div className="pos-container" style={styles.container}>
-      {/* Left Column: Unified Search & Catalog */}
+      {/* Left Column: Unified Search & Visual Catalog */}
       <div className="pos-left-col" style={styles.leftCol}>
         <div style={{ ...styles.card, flexGrow: 1 }}>
           {/* Card Header */}
@@ -244,38 +309,90 @@ export default function PosPage() {
 
             {scanError && <div style={styles.errorBanner}>{scanError}</div>}
 
-            {/* Live Filtered Catalog Grid */}
+            {/* Live Filtered Catalog Grid with Images & Live Stock */}
             <div style={styles.catalogGrid}>
               {filteredCatalog.length === 0 ? (
                 <div style={{ gridColumn: '1 / -1', padding: '30px', textAlign: 'center', color: '#6b7280' }}>
                   Aucun produit correspondant à "{catalogSearch}".
                 </div>
               ) : (
-                filteredCatalog.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      addToCart(p);
-                      playSuccessBeep();
-                    }}
-                    style={styles.catalogItem}
-                  >
-                    <div style={styles.itemTitle}>{p.name}</div>
-                    <div style={styles.itemMeta}>
-                      <span>{Number(p.price).toFixed(2)} MAD</span>
-                      <span style={{ color: p.quantity <= 5 ? '#dc2626' : '#6b7280' }}>
-                        Stock: {p.quantity}
-                      </span>
-                    </div>
-                  </button>
-                ))
+                filteredCatalog.map((p) => {
+                  const liveStock = getLiveStock(p);
+                  const isOutOfStock = transactionType === 'sale' && liveStock <= 0;
+                  const isLowStock = transactionType === 'sale' && liveStock > 0 && liveStock <= 5;
+                  const primaryImage = p.images && p.images.length > 0 ? p.images[0].path : null;
+
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => addToCart(p)}
+                      disabled={isOutOfStock}
+                      style={{
+                        ...styles.catalogItem,
+                        opacity: isOutOfStock ? 0.6 : 1,
+                        cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+                        borderColor: isOutOfStock ? '#fca5a5' : '#e5e7eb',
+                      }}
+                      title={isOutOfStock ? "Stock épuisé" : `Cliquer pour ajouter : ${p.name}`}
+                    >
+                      {/* Product Image Thumbnail */}
+                      <div style={styles.catalogImgWrapper}>
+                        {primaryImage ? (
+                          <img
+                            src={primaryImage}
+                            alt={p.name}
+                            style={styles.catalogImg}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = '/icon.jpeg';
+                            }}
+                          />
+                        ) : (
+                          <div style={styles.catalogNoImg}>
+                            <Package size={28} style={{ color: '#9ca3af' }} />
+                          </div>
+                        )}
+                        {/* Live Stock Overlay Badge */}
+                        <div
+                          style={{
+                            ...styles.stockOverlayBadge,
+                            backgroundColor: isOutOfStock
+                              ? '#ef4444'
+                              : isLowStock
+                              ? '#f59e0b'
+                              : '#10b981',
+                          }}
+                        >
+                          {isOutOfStock
+                            ? 'Épuisé (0)'
+                            : `Stock: ${liveStock}`}
+                        </div>
+                      </div>
+
+                      {/* Details */}
+                      <div style={styles.catalogContent}>
+                        <div style={styles.itemTitle} title={p.name}>
+                          {p.name}
+                        </div>
+                        <div style={styles.itemCategory}>
+                          {p.category?.name || 'Général'}
+                        </div>
+                        <div style={styles.itemPriceRow}>
+                          <span style={styles.itemPrice}>
+                            {Number(p.price).toFixed(2)} MAD
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Right Column: Checkout Cart */}
+      {/* Right Column: Checkout Cart with Dynamic Unit Price */}
       <div className="pos-right-col" style={styles.rightCol}>
         <div style={styles.cartCard}>
           {/* Cart Header */}
@@ -301,58 +418,118 @@ export default function PosPage() {
             {cart.length === 0 ? (
               <div style={styles.emptyCart}>
                 <ShoppingCart size={40} style={{ color: '#d1d5db', marginBottom: '12px' }} />
-                <div>Panier vide. Scannez des codes-barres ou recherchez des articles ci-dessus.</div>
+                <div>Panier vide. Scannez des codes-barres ou cliquez sur les articles à gauche.</div>
               </div>
             ) : (
               <div style={styles.cartList}>
-                {cart.map((item) => (
-                  <div key={item.product.id} style={styles.cartItemRow}>
-                    <div style={{ flexGrow: 1 }}>
-                      <div style={styles.cartItemName}>{item.product.name}</div>
-                      <div style={styles.cartItemSub}>
-                        Code: {item.product.barcode}
-                      </div>
-                    </div>
+                {cart.map((item) => {
+                  const itemImg = item.product.images && item.product.images.length > 0 ? item.product.images[0].path : null;
+                  const isPriceModified = transactionType === 'sale' && item.unit_price !== parseFloat(item.product.price);
 
-                    <div style={styles.cartQtyControls}>
+                  return (
+                    <div key={item.product.id} style={styles.cartItemRow}>
+                      {/* Product Thumbnail */}
+                      <div style={styles.cartItemThumbBox}>
+                        {itemImg ? (
+                          <img
+                            src={itemImg}
+                            alt={item.product.name}
+                            style={styles.cartItemThumb}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = '/icon.jpeg';
+                            }}
+                          />
+                        ) : (
+                          <div style={styles.cartItemNoThumb}>
+                            <Package size={16} />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Name & Code */}
+                      <div style={{ flexGrow: 1, minWidth: 0 }}>
+                        <div style={styles.cartItemName} title={item.product.name}>
+                          {item.product.name}
+                        </div>
+                        <div style={styles.cartItemSub}>
+                          Code: {item.product.barcode}
+                        </div>
+                        
+                        {/* Dynamic Unit Price Input for Sales */}
+                        {transactionType === 'sale' && (
+                          <div style={styles.unitPriceContainer}>
+                            <span style={styles.unitPriceLabel}>P.U:</span>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              value={item.unit_price}
+                              onChange={(e) => updateUnitPrice(item.product.id, e.target.value)}
+                              style={{
+                                ...styles.unitPriceInput,
+                                borderColor: isPriceModified ? '#f59e0b' : '#d1d5db',
+                                backgroundColor: isPriceModified ? '#fffbeb' : '#ffffff',
+                              }}
+                              title="Prix unitaire de vente négocié / dynamique"
+                            />
+                            <span style={{ fontSize: '11px', color: '#6b7280' }}>MAD</span>
+                            {isPriceModified && (
+                              <span style={styles.priceAdjustedBadge} title={`Prix catalogue : ${item.product.price} MAD`}>
+                                Modifié
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Quantity Controls */}
+                      <div style={styles.cartQtyControls}>
+                        <button
+                          onClick={() => updateQuantity(item.product.id, -1)}
+                          style={styles.qtyBtn}
+                          title="Diminuer"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span style={styles.qtyNum}>{item.quantity}</span>
+                        <button
+                          onClick={() => updateQuantity(item.product.id, 1)}
+                          style={styles.qtyBtn}
+                          title="Augmenter"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+
+                      {/* Subtotal Box */}
+                      {transactionType === 'sale' ? (
+                        <div style={styles.cartPriceBox}>
+                          <div style={{ fontWeight: '700', color: '#dc2626', fontSize: '13px' }}>
+                            {(item.quantity * item.unit_price).toFixed(2)} MAD
+                          </div>
+                        </div>
+                      ) : isAdmin ? (
+                        <div style={styles.cartPriceBox}>
+                          {(item.quantity * (parseFloat(item.product.cost_price) || 0)).toFixed(2)} MAD
+                        </div>
+                      ) : (
+                        <div style={{ ...styles.cartPriceBox, color: '#16a34a', fontWeight: '700' }}>
+                          +{item.quantity} Unité{item.quantity > 1 ? 's' : ''}
+                        </div>
+                      )}
+
+                      {/* Remove Button */}
                       <button
-                        onClick={() => updateQuantity(item.product.id, -1)}
-                        style={styles.qtyBtn}
+                        onClick={() => removeFromCart(item.product.id)}
+                        style={styles.cartRemoveBtn}
+                        title="Retirer l'article"
                       >
-                        <Minus size={14} />
-                      </button>
-                      <span style={styles.qtyNum}>{item.quantity}</span>
-                      <button
-                        onClick={() => updateQuantity(item.product.id, 1)}
-                        style={styles.qtyBtn}
-                      >
-                        <Plus size={14} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
-
-                    {transactionType === 'sale' ? (
-                      <div style={styles.cartPriceBox}>
-                        {(item.quantity * item.unit_price).toFixed(2)} MAD
-                      </div>
-                    ) : isAdmin ? (
-                      <div style={styles.cartPriceBox}>
-                        {(item.quantity * (parseFloat(item.product.cost_price) || 0)).toFixed(2)} MAD
-                      </div>
-                    ) : (
-                      <div style={{ ...styles.cartPriceBox, color: '#16a34a', fontWeight: '700' }}>
-                        +{item.quantity} Unité{item.quantity > 1 ? 's' : ''}
-                      </div>
-                    )}
-
-                    <button
-                      onClick={() => removeFromCart(item.product.id)}
-                      style={styles.cartRemoveBtn}
-                      title="Retirer l'article"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -389,7 +566,7 @@ export default function PosPage() {
                 Vider Panier
               </button>
               <button
-                onClick={handleCheckout}
+                onClick={handleOpenCheckoutConfirmation}
                 disabled={cart.length === 0 || processingSale || processingTx}
                 style={{
                   ...styles.checkoutBtn,
@@ -410,6 +587,75 @@ export default function PosPage() {
           </div>
         </div>
       </div>
+
+      {/* Sale Price Confirmation & Validation Modal */}
+      <Modal
+        isOpen={isConfirmSaleModalOpen}
+        onClose={() => setIsConfirmSaleModalOpen(false)}
+        title="Confirmation de Vente & Prix Vendeur"
+        maxWidth="550px"
+      >
+        <div style={styles.priceReviewContainer}>
+          <p style={styles.priceReviewDesc}>
+            Vérifiez ou ajustez les prix de vente unitaires pour cette transaction avant validation définitive :
+          </p>
+
+          <div style={styles.priceReviewList}>
+            {cart.map((item) => (
+              <div key={item.product.id} style={styles.priceReviewRow}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={styles.priceReviewName}>{item.product.name}</div>
+                  <div style={styles.priceReviewSub}>
+                    Qté: <strong>{item.quantity}</strong> × Prix Unit:
+                  </div>
+                </div>
+
+                <div style={styles.priceReviewInputGroup}>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={item.unit_price}
+                    onChange={(e) => updateUnitPrice(item.product.id, e.target.value)}
+                    style={styles.priceReviewInput}
+                  />
+                  <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>MAD</span>
+                </div>
+
+                <div style={styles.priceReviewSubtotal}>
+                  {(item.quantity * item.unit_price).toFixed(2)} MAD
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={styles.priceReviewTotalBox}>
+            <span style={{ fontSize: '15px', fontWeight: '600', color: '#374151' }}>Montant Total Net :</span>
+            <span style={{ fontSize: '22px', fontWeight: '800', color: '#dc2626' }}>
+              {totalAmount.toFixed(2)} MAD
+            </span>
+          </div>
+
+          <div style={styles.priceReviewActions}>
+            <button
+              type="button"
+              onClick={() => setIsConfirmSaleModalOpen(false)}
+              style={styles.cancelBtn}
+            >
+              Modifier Panier
+            </button>
+            <button
+              type="button"
+              onClick={handleExecuteCheckout}
+              disabled={processingSale}
+              style={styles.confirmFinalBtn}
+            >
+              <CheckCircle size={18} style={{ marginRight: '6px' }} />
+              {processingSale ? 'Validation...' : 'Confirmer et Encaisser'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Completed Sale / Stock Entry Receipt Modal */}
       <Modal
@@ -478,7 +724,7 @@ const styles = {
     minWidth: 0,
   },
   rightCol: {
-    width: '420px',
+    width: '460px',
     display: 'flex',
     flexDirection: 'column',
     flexShrink: 0,
@@ -552,35 +798,90 @@ const styles = {
     fontSize: '13px',
   },
   catalogGrid: {
-    padding: '16px',
+    padding: '4px',
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-    gap: '10px',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+    gap: '12px',
     overflowY: 'auto',
-    maxHeight: '340px',
+    maxHeight: 'calc(100vh - 240px)',
   },
   catalogItem: {
     backgroundColor: '#ffffff',
     border: '1px solid #e5e7eb',
-    borderRadius: '6px',
-    padding: '12px',
+    borderRadius: '8px',
+    overflow: 'hidden',
     textAlign: 'left',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
     display: 'flex',
     flexDirection: 'column',
+    padding: 0,
+  },
+  catalogImgWrapper: {
+    position: 'relative',
+    width: '100%',
+    height: '110px',
+    backgroundColor: '#f3f4f6',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  catalogImg: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  catalogNoImg: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
+  },
+  stockOverlayBadge: {
+    position: 'absolute',
+    top: '6px',
+    right: '6px',
+    padding: '2px 7px',
+    borderRadius: '12px',
+    fontSize: '11px',
+    fontWeight: '700',
+    color: '#ffffff',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+  },
+  catalogContent: {
+    padding: '10px',
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
     justifyContent: 'space-between',
   },
   itemTitle: {
     fontSize: '13px',
     fontWeight: '600',
     color: '#111827',
-    marginBottom: '8px',
+    marginBottom: '2px',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+    lineHeight: '1.3',
   },
-  itemMeta: {
+  itemCategory: {
+    fontSize: '11px',
+    color: '#6b7280',
+    marginBottom: '6px',
+  },
+  itemPriceRow: {
     display: 'flex',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    fontSize: '12px',
+    marginTop: 'auto',
+  },
+  itemPrice: {
+    fontSize: '13px',
     fontWeight: '700',
     color: '#dc2626',
   },
@@ -639,19 +940,70 @@ const styles = {
     borderRadius: '6px',
     border: '1px solid #f3f4f6',
   },
+  cartItemThumbBox: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '4px',
+    overflow: 'hidden',
+    flexShrink: 0,
+    backgroundColor: '#e5e7eb',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartItemThumb: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  cartItemNoThumb: {
+    color: '#9ca3af',
+  },
   cartItemName: {
     fontSize: '13px',
     fontWeight: '600',
     color: '#111827',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   cartItemSub: {
     fontSize: '11px',
     color: '#6b7280',
   },
-  cartQtyControls: {
+  unitPriceContainer: {
     display: 'flex',
     alignItems: 'center',
     gap: '4px',
+    marginTop: '4px',
+  },
+  unitPriceLabel: {
+    fontSize: '11px',
+    fontWeight: '600',
+    color: '#4b5563',
+  },
+  unitPriceInput: {
+    width: '65px',
+    padding: '2px 4px',
+    fontSize: '12px',
+    fontWeight: '600',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    textAlign: 'right',
+  },
+  priceAdjustedBadge: {
+    fontSize: '9px',
+    fontWeight: '700',
+    color: '#d97706',
+    backgroundColor: '#fef3c7',
+    padding: '1px 4px',
+    borderRadius: '4px',
+    marginLeft: '2px',
+  },
+  cartQtyControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '2px',
     backgroundColor: '#ffffff',
     border: '1px solid #d1d5db',
     borderRadius: '4px',
@@ -669,14 +1021,11 @@ const styles = {
   qtyNum: {
     fontSize: '13px',
     fontWeight: '700',
-    padding: '0 6px',
+    padding: '0 4px',
     color: '#111827',
   },
   cartPriceBox: {
-    fontSize: '12px',
-    fontWeight: '700',
-    color: '#dc2626',
-    minWidth: '70px',
+    minWidth: '75px',
     textAlign: 'right',
   },
   cartRemoveBtn: {
@@ -734,6 +1083,105 @@ const styles = {
     fontSize: '14px',
     fontWeight: '700',
     color: '#ffffff',
+    cursor: 'pointer',
+  },
+  priceReviewContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  priceReviewDesc: {
+    fontSize: '13px',
+    color: '#4b5563',
+    margin: 0,
+  },
+  priceReviewList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    maxHeight: '260px',
+    overflowY: 'auto',
+    border: '1px solid #e5e7eb',
+    borderRadius: '6px',
+    padding: '10px',
+    backgroundColor: '#f9fafb',
+  },
+  priceReviewRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    padding: '8px',
+    backgroundColor: '#ffffff',
+    borderRadius: '6px',
+    border: '1px solid #e5e7eb',
+  },
+  priceReviewName: {
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#111827',
+  },
+  priceReviewSub: {
+    fontSize: '12px',
+    color: '#6b7280',
+    marginTop: '2px',
+  },
+  priceReviewInputGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  priceReviewInput: {
+    width: '75px',
+    padding: '4px 6px',
+    fontSize: '13px',
+    fontWeight: '700',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    textAlign: 'right',
+  },
+  priceReviewSubtotal: {
+    fontSize: '13px',
+    fontWeight: '700',
+    color: '#dc2626',
+    minWidth: '80px',
+    textAlign: 'right',
+  },
+  priceReviewTotalBox: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 16px',
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fca5a5',
+    borderRadius: '6px',
+  },
+  priceReviewActions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '10px',
+    marginTop: '6px',
+  },
+  cancelBtn: {
+    padding: '9px 16px',
+    backgroundColor: '#ffffff',
+    color: '#4b5563',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '13px',
+    fontWeight: '600',
+    cursor: 'pointer',
+  },
+  confirmFinalBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '9px 18px',
+    backgroundColor: '#dc2626',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '13px',
+    fontWeight: '700',
     cursor: 'pointer',
   },
   receiptContainer: {

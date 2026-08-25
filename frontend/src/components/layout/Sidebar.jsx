@@ -31,11 +31,13 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
     navigate('/login');
   };
 
+  const isAdmin = user?.role === 'admin';
+
   const navItems = [
-    { label: 'Tableau de bord', path: '/', icon: LayoutDashboard },
+    ...(isAdmin ? [{ label: 'Tableau de bord', path: '/', icon: LayoutDashboard }] : []),
+    { label: 'Caisse / Vente (POS)', path: '/pos', icon: ShoppingCart },
     { label: 'Gestion des Produits', path: '/products', icon: Package },
     { label: 'Catégories & Marques', path: '/categories', icon: Tags },
-    { label: 'Caisse / Vente (POS)', path: '/pos', icon: ShoppingCart },
     { label: 'Historique des Ventes', path: '/transactions', icon: Receipt },
   ];
 
