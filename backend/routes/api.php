@@ -9,12 +9,17 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProductImageController;
 use App\Http\Controllers\ScannerController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\BackupController;
 
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
+    // Backup route
+    Route::post('/backup/google-drive', [BackupController::class, 'backupToGoogleDrive']);
+
     // Reports endpoint
     Route::get('/reports/daily', [ReportController::class, 'daily']);
+
 
     // Low-stock notifications endpoint
     Route::get('/products/low-stock', [ProductController::class, 'lowStockAlerts']);

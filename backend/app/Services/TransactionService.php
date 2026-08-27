@@ -9,10 +9,6 @@ use Illuminate\Support\Facades\DB;
 
 class TransactionService
 {
-    public function __construct(private readonly DiscordLowStockNotifier $discordLowStockNotifier)
-    {
-    }
-
     public function create(array $data): array
     {
         return DB::transaction(function () use ($data) {
@@ -72,10 +68,10 @@ class TransactionService
                 ]);
             }
 
-            DB::afterCommit(function () use ($transaction, $lowStockTriggered) {
-                $this->discordLowStockNotifier->notify($lowStockTriggered);
+            DB::afterCommit(function () use ($transaction) {
                 event(new \App\Events\TransactionCreated($transaction));
             });
+
 
             return [
                 'transaction'      => $transaction->load('items.product'),

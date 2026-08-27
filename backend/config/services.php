@@ -35,8 +35,13 @@ return [
         ],
     ],
 
-    'discord' => [
-        'low_stock_webhook_url' => env('DISCORD_LOW_STOCK_WEBHOOK_URL'),
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'refresh_token' => env('GOOGLE_REFRESH_TOKEN'),
+        'service_account_json' => env('GOOGLE_SERVICE_ACCOUNT_JSON'),
+        'folder_id' => env('GOOGLE_DRIVE_FOLDER_ID'),
     ],
 
 ];
+
