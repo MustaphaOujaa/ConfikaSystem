@@ -7,7 +7,9 @@ import {
   useUpdateCategoryMutation, 
   useDeleteCategoryMutation,
   useGetBrandsQuery,
-  useCreateBrandMutation
+  useCreateBrandMutation,
+  useUpdateBrandMutation,
+  useDeleteBrandMutation,
 } from '../api/apiSlice';
 import Modal from '../components/common/Modal';
 import Pagination from '../components/common/Pagination';
@@ -24,12 +26,15 @@ export default function CategoriesPage() {
   const [isAddCatOpen, setIsAddCatOpen] = useState(false);
   const [isEditCatOpen, setIsEditCatOpen] = useState(false);
   const [isAddBrandOpen, setIsAddBrandOpen] = useState(false);
+  const [isEditBrandOpen, setIsEditBrandOpen] = useState(false);
 
   // Forms
   const [catName, setCatName] = useState('');
   const [catDesc, setCatDesc] = useState('');
   const [editingCat, setEditingCat] = useState(null);
+
   const [brandName, setBrandName] = useState('');
+  const [editingBrand, setEditingBrand] = useState(null);
   const [formError, setFormError] = useState('');
 
   // RTK Query
@@ -41,6 +46,8 @@ export default function CategoriesPage() {
   const [deleteCategory] = useDeleteCategoryMutation();
 
   const [createBrand, { isLoading: creatingBrand }] = useCreateBrandMutation();
+  const [updateBrand, { isLoading: updatingBrand }] = useUpdateBrandMutation();
+  const [deleteBrand] = useDeleteBrandMutation();
 
   const categories = categoriesData?.data || [];
   const brands = brandsData || [];
@@ -107,6 +114,35 @@ export default function CategoriesPage() {
       setIsAddBrandOpen(false);
     } catch (err) {
       setFormError(err?.data?.message || 'Échec de la création de la marque.');
+    }
+  };
+
+  const handleOpenEditBrand = (brand) => {
+    setEditingBrand(brand);
+    setBrandName(brand.name || '');
+    setFormError('');
+    setIsEditBrandOpen(true);
+  };
+
+  const handleEditBrandSubmit = async (e) => {
+    e.preventDefault();
+    setFormError('');
+    try {
+      await updateBrand({ id: editingBrand.id, name: brandName }).unwrap();
+      setIsEditBrandOpen(false);
+    } catch (err) {
+      setFormError(err?.data?.message || 'Échec de la mise à jour de la marque.');
+    }
+  };
+
+  const handleDeleteBrand = async (id) => {
+    if (window.confirm('Voulez-vous vraiment supprimer cette marque ?')) {
+      try {
+        await deleteBrand(id).unwrap();
+      } catch (err) {
+        console.error(err);
+        alert('Échec de la suppression de la marque.');
+      }
     }
   };
 
@@ -204,7 +240,7 @@ export default function CategoriesPage() {
 
       {/* Tab Content: Brands */}
       {activeTab === 'brands' && (
-        <div style={styles.card}>
+        <div className="responsive-table-container" style={styles.card}>
           {loadingBrands ? (
             <div style={styles.loading}>Chargement des marques...</div>
           ) : brands.length === 0 ? (
@@ -215,7 +251,9 @@ export default function CategoriesPage() {
                 <tr>
                   <th style={styles.th}>ID</th>
                   <th style={styles.th}>Nom de la Marque</th>
+                  <th style={styles.th}>Total Produits</th>
                   <th style={styles.th}>Date de Création</th>
+                  <th style={{ ...styles.th, textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -223,7 +261,22 @@ export default function CategoriesPage() {
                   <tr key={b.id} style={styles.tr}>
                     <td style={styles.td}>#{b.id}</td>
                     <td style={{ ...styles.td, fontWeight: '600', color: '#111827' }}>{b.name}</td>
+                    <td style={styles.td}>
+                      <span style={styles.countBadge}>
+                        {b.products_count ?? 0} Produits
+                      </span>
+                    </td>
                     <td style={styles.td}>{b.created_at ? new Date(b.created_at).toLocaleDateString('fr-FR') : 'N/A'}</td>
+                    <td style={{ ...styles.td, textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '6px' }}>
+                        <button onClick={() => handleOpenEditBrand(b)} style={styles.iconBtn} title="Modifier">
+                          <Edit size={16} />
+                        </button>
+                        <button onClick={() => handleDeleteBrand(b.id)} style={styles.deleteIconBtn} title="Supprimer">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -317,6 +370,29 @@ export default function CategoriesPage() {
             <button type="button" onClick={() => setIsAddBrandOpen(false)} style={styles.cancelBtn}>Annuler</button>
             <button type="submit" disabled={creatingBrand} style={styles.saveBtn}>
               {creatingBrand ? 'Enregistrement...' : 'Créer la Marque'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Brand Modal */}
+      <Modal isOpen={isEditBrandOpen} onClose={() => setIsEditBrandOpen(false)} title="Modifier la Marque">
+        {formError && <div style={styles.formError}>{formError}</div>}
+        <form onSubmit={handleEditBrandSubmit} style={styles.form}>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Nom de la marque *</label>
+            <input
+              type="text"
+              required
+              value={brandName}
+              onChange={(e) => setBrandName(e.target.value)}
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.modalActions}>
+            <button type="button" onClick={() => setIsEditBrandOpen(false)} style={styles.cancelBtn}>Annuler</button>
+            <button type="submit" disabled={updatingBrand} style={styles.saveBtn}>
+              {updatingBrand ? 'Mise à jour...' : 'Mettre à jour'}
             </button>
           </div>
         </form>

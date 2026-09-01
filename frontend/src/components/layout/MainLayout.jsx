@@ -9,7 +9,7 @@ import { useRealtimeSync } from '../../utils/useRealtimeSync';
 export default function MainLayout() {
   const token = useSelector(selectCurrentToken);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { isConnected } = useRealtimeSync();
+  useRealtimeSync();
 
   if (!token) {
     return <Navigate to="/login" replace />;
@@ -25,7 +25,6 @@ export default function MainLayout() {
       <div className="app-main-wrapper">
         <Navbar 
           onToggleSidebar={() => setIsSidebarOpen(prev => !prev)} 
-          isLiveConnected={isConnected}
         />
         <main className="app-content" style={styles.content}>
           <Outlet />
