@@ -3,7 +3,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { AlertCircle, ShoppingCart, Menu } from 'lucide-react';
 import { useGetLowStockAlertsQuery } from '../../api/apiSlice';
 
-export default function Navbar({ onToggleSidebar, isLiveConnected }) {
+export default function Navbar({ onToggleSidebar }) {
   const location = useLocation();
 
   const getPageTitle = (path) => {
@@ -29,8 +29,8 @@ export default function Navbar({ onToggleSidebar, isLiveConnected }) {
   return (
     <header className="navbar-header" style={styles.header}>
       <div style={styles.left}>
-        <button 
-          className="mobile-nav-toggle" 
+        <button
+          className="mobile-nav-toggle"
           onClick={onToggleSidebar}
           aria-label="Ouvrir le menu"
           type="button"
@@ -43,36 +43,6 @@ export default function Navbar({ onToggleSidebar, isLiveConnected }) {
       </div>
 
       <div style={styles.right}>
-        {/* Real-time WebSocket Live Status Badge */}
-        <div 
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '4px 10px',
-            borderRadius: '20px',
-            fontSize: '12px',
-            fontWeight: '600',
-            backgroundColor: isLiveConnected ? '#ecfdf5' : '#f3f4f6',
-            color: isLiveConnected ? '#059669' : '#6b7280',
-            border: `1px solid ${isLiveConnected ? '#a7f3d0' : '#e5e7eb'}`,
-          }}
-          title={isLiveConnected ? "Synchronisation en direct active (Laravel Reverb)" : "Connexion au serveur temps réel..."}
-        >
-          <span 
-            style={{
-              width: '7px',
-              height: '7px',
-              borderRadius: '50%',
-              backgroundColor: isLiveConnected ? '#10b981' : '#9ca3af',
-              boxShadow: isLiveConnected ? '0 0 6px #10b981' : 'none',
-            }} 
-          />
-          <span className="navbar-alert-text">
-            {isLiveConnected ? 'En direct' : 'Synchro'}
-          </span>
-        </div>
-
         {lowStockCount > 0 && (
           <Link to="/products" style={styles.alertBanner} title="Produits nécessitant un réapprovisionnement">
             <AlertCircle size={16} />

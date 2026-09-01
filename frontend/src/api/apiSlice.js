@@ -124,7 +124,22 @@ export const apiSlice = createApi({
         method: 'POST',
         body: brandData,
       }),
-      invalidatesTags: ['Brand'],
+      invalidatesTags: ['Brand', { type: 'Product', id: 'LIST' }],
+    }),
+    updateBrand: builder.mutation({
+      query: ({ id, ...brandData }) => ({
+        url: `/brands/${id}`,
+        method: 'PUT',
+        body: brandData,
+      }),
+      invalidatesTags: ['Brand', { type: 'Product', id: 'LIST' }],
+    }),
+    deleteBrand: builder.mutation({
+      query: (id) => ({
+        url: `/brands/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Brand', { type: 'Product', id: 'LIST' }],
     }),
 
     // Images
@@ -191,6 +206,8 @@ export const {
   useDeleteCategoryMutation,
   useGetBrandsQuery,
   useCreateBrandMutation,
+  useUpdateBrandMutation,
+  useDeleteBrandMutation,
   useAddProductImageMutation,
   useDeleteProductImageMutation,
   useGetTransactionsQuery,

@@ -31,7 +31,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('categories', CategoryController::class);
 
     // Brands resource routes
-    Route::apiResource('brands', BrandController::class)->only(['index', 'store']);
+    Route::apiResource('brands', BrandController::class);
 
     // Product image routes
     Route::post('/products/{product}/images', [ProductImageController::class, 'store']);

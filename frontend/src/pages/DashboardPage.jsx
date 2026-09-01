@@ -58,7 +58,7 @@ export default function DashboardPage() {
   const lowStockCount = lowStockData?.count || 0;
   const totalCategories = categoriesData?.total || categoriesData?.data?.length || 0;
   const recentTransactions = transactionsData?.data || [];
-  const totalTransactions = transactionsData?.total || recentTransactions.length || 0;
+  const dailyTransactionsCount = dailyReport?.transactions_count || 0;
 
   const handlePrintDailyBlade = () => {
     window.open(`/reports/daily/print?date=${selectedDate}`, '_blank', 'width=700,height=800');
@@ -296,8 +296,8 @@ export default function DashboardPage() {
             <Receipt size={22} />
           </div>
           <div>
-            <div style={styles.statLabel}>Total Transactions</div>
-            <div style={styles.statValue}>{loadingTransactions ? '...' : totalTransactions}</div>
+            <div style={styles.statLabel}>Transactions du Jour</div>
+            <div style={styles.statValue}>{loadingDaily ? '...' : dailyTransactionsCount}</div>
           </div>
         </div>
       </div>

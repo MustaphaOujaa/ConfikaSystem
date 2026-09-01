@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { apiSlice } from '../api/apiSlice';
 import echo from './echo';
@@ -29,13 +29,24 @@ export function useRealtimeSync() {
       dispatch(apiSlice.util.invalidateTags(['Product', 'LowStock', 'DailyReport']));
     };
 
+    // Handler for any brand changes
+    const handleBrandChange = () => {
+      dispatch(apiSlice.util.invalidateTags(['Brand', 'Product']));
+    };
+
     inventoryChannel
       .listen('.product.created', handleProductChange)
       .listen('ProductCreated', handleProductChange)
       .listen('.product.updated', handleProductChange)
       .listen('ProductUpdated', handleProductChange)
       .listen('.product.deleted', handleProductChange)
-      .listen('ProductDeleted', handleProductChange);
+      .listen('ProductDeleted', handleProductChange)
+      .listen('.brand.created', handleBrandChange)
+      .listen('BrandCreated', handleBrandChange)
+      .listen('.brand.updated', handleBrandChange)
+      .listen('BrandUpdated', handleBrandChange)
+      .listen('.brand.deleted', handleBrandChange)
+      .listen('BrandDeleted', handleBrandChange);
 
     // Subscribe to transactions channel
     const transactionsChannel = echo.channel('transactions');
@@ -54,6 +65,12 @@ export function useRealtimeSync() {
       inventoryChannel.stopListening('ProductUpdated');
       inventoryChannel.stopListening('.product.deleted');
       inventoryChannel.stopListening('ProductDeleted');
+      inventoryChannel.stopListening('.brand.created');
+      inventoryChannel.stopListening('BrandCreated');
+      inventoryChannel.stopListening('.brand.updated');
+      inventoryChannel.stopListening('BrandUpdated');
+      inventoryChannel.stopListening('.brand.deleted');
+      inventoryChannel.stopListening('BrandDeleted');
       transactionsChannel.stopListening('.transaction.created');
       transactionsChannel.stopListening('TransactionCreated');
       echo.leaveChannel('inventory');
