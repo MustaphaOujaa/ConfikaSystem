@@ -24,6 +24,91 @@ class ReportController extends Controller
         return response()->json($data);
     }
 
+    public function monthly(Request $request): JsonResponse
+    {
+        if (! $request->user()?->isAdmin()) {
+            return response()->json([
+                'message' => 'Accès refusé. Les rapports mensuels financiers sont réservés aux administrateurs.'
+            ], 403);
+        }
+
+        $year = (int) $request->query('year', Carbon::now()->year);
+        if ($year < 2000 || $year > 2100) {
+            $year = Carbon::now()->year;
+        }
+
+        $monthlyData = [];
+        $totalYearlySales = 0.0;
+        $totalYearlyCost = 0.0;
+        $totalYearlyProfit = 0.0;
+        $totalYearlyItemsSold = 0;
+        $totalYearlyTransactions = 0;
+
+        $monthNames = [
+            1 => 'Jan', 2 => 'Fév', 3 => 'Mar', 4 => 'Avr',
+            5 => 'Mai', 6 => 'Juin', 7 => 'Juil', 8 => 'Août',
+            9 => 'Sept', 10 => 'Oct', 11 => 'Nov', 12 => 'Déc'
+        ];
+
+        // Fetch all sale transactions for the year with items and products
+        $sales = Transaction::where('type', 'sale')
+            ->whereYear('transaction_date', $year)
+            ->with(['items.product'])
+            ->get();
+
+        for ($m = 1; $m <= 12; $m++) {
+            $monthSales = $sales->filter(function ($tx) use ($m) {
+                return Carbon::parse($tx->transaction_date)->month === $m;
+            });
+
+            $monthRevenue = (float) $monthSales->sum('total_amount');
+            $monthTxCount = $monthSales->count();
+            $monthItemsSold = 0;
+            $monthCost = 0.0;
+
+            foreach ($monthSales as $tx) {
+                foreach ($tx->items as $item) {
+                    $qty = (int) $item->quantity;
+                    $monthItemsSold += $qty;
+                    $unitCost = $item->product ? (float) $item->product->cost_price : 0.0;
+                    $monthCost += ($qty * $unitCost);
+                }
+            }
+
+            $monthProfit = $monthRevenue - $monthCost;
+
+            $totalYearlySales += $monthRevenue;
+            $totalYearlyCost += $monthCost;
+            $totalYearlyProfit += $monthProfit;
+            $totalYearlyItemsSold += $monthItemsSold;
+            $totalYearlyTransactions += $monthTxCount;
+
+            $monthlyData[] = [
+                'month_num' => $m,
+                'month_name' => $monthNames[$m],
+                'month_label' => $monthNames[$m] . ' ' . $year,
+                'total_sold' => round($monthRevenue, 2),
+                'total_cost' => round($monthCost, 2),
+                'net_profit' => round($monthProfit, 2),
+                'items_sold_count' => $monthItemsSold,
+                'transactions_count' => $monthTxCount,
+            ];
+        }
+
+        return response()->json([
+            'year' => $year,
+            'summary' => [
+                'total_sales' => round($totalYearlySales, 2),
+                'total_cost' => round($totalYearlyCost, 2),
+                'total_profit' => round($totalYearlyProfit, 2),
+                'total_items_sold' => $totalYearlyItemsSold,
+                'total_transactions' => $totalYearlyTransactions,
+            ],
+            'monthly' => $monthlyData,
+            'currency' => 'MAD',
+        ]);
+    }
+
     public function dailyBlade(Request $request): View
     {
         $dateParam = $request->query('date');

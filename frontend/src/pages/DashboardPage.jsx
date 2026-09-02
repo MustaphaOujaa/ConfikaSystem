@@ -24,6 +24,7 @@ import {
   useGetDailyReportQuery
 } from '../api/apiSlice';
 import { selectCurrentUser } from '../store/authSlice';
+import MonthlyGainChart from '../components/MonthlyGainChart';
 
 export default function DashboardPage() {
   const user = useSelector(selectCurrentUser);
@@ -145,7 +146,7 @@ export default function DashboardPage() {
             <div style={styles.dailyItem}>
               <div style={styles.dailyLabel}>Bénéfice Net du {selectedDate} (Gain)</div>
               <div style={styles.dailyVal('#dc2626')}>
-                {loadingDaily ? '...' : `+${Number(dailyReport?.net_profit_today || 0).toFixed(2)} MAD`}
+                {loadingDaily ? '...' : `+ ${Number(dailyReport?.net_profit_today || 0).toFixed(2)} MAD`}
               </div>
               <div style={styles.dailySub}>Ventes moins Coût des Marchandises</div>
             </div>
@@ -232,7 +233,7 @@ export default function DashboardPage() {
                               {Number(item.total_revenue).toFixed(2)} MAD
                             </td>
                             <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700', color: '#16a34a' }}>
-                              +{Number(item.total_profit).toFixed(2)} MAD
+                              + {Number(item.total_profit).toFixed(2)} MAD
                             </td>
                           </tr>
                         ))
@@ -245,7 +246,7 @@ export default function DashboardPage() {
                           <td style={{ ...styles.td, textAlign: 'center', fontWeight: '800' }}>{dailyReport?.products_sold_count || 0}</td>
                           <td style={styles.td}></td>
                           <td style={{ ...styles.td, textAlign: 'right', fontWeight: '800' }}>{Number(dailyReport?.total_sales_revenue || 0).toFixed(2)} MAD</td>
-                          <td style={{ ...styles.td, textAlign: 'right', fontWeight: '800', color: '#16a34a' }}>+{Number(dailyReport?.net_profit_today || 0).toFixed(2)} MAD</td>
+                          <td style={{ ...styles.td, textAlign: 'right', fontWeight: '800', color: '#16a34a' }}>+ {Number(dailyReport?.net_profit_today || 0).toFixed(2)} MAD</td>
                         </tr>
                       </tfoot>
                     )}
@@ -256,6 +257,9 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Monthly Sales & Gain Visual Graph (Visible exclusively to Admin) */}
+      {isAdmin && <MonthlyGainChart />}
 
       {/* KPI Cards Grid */}
       <div style={styles.statsGrid}>

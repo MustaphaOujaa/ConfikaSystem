@@ -24,10 +24,14 @@ export const apiSlice = createApi({
       }),
     }),
 
-    // Daily Report
+    // Daily & Monthly Reports
     getDailyReport: builder.query({
       query: (date) => `/reports/daily${date ? `?date=${date}` : ''}`,
       providesTags: ['DailyReport'],
+    }),
+    getMonthlyReport: builder.query({
+      query: (year) => `/reports/monthly${year ? `?year=${year}` : ''}`,
+      providesTags: ['DailyReport', 'Transaction'],
     }),
 
     // Products
@@ -194,6 +198,7 @@ export const apiSlice = createApi({
 export const {
   useLoginMutation,
   useGetDailyReportQuery,
+  useGetMonthlyReportQuery,
   useGetProductsQuery,
   useGetProductByIdQuery,
   useGetLowStockAlertsQuery,

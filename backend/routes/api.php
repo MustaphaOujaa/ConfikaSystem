@@ -19,6 +19,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Reports endpoint
     Route::get('/reports/daily', [ReportController::class, 'daily']);
+    Route::get('/reports/monthly', [ReportController::class, 'monthly']);
 
 
     // Low-stock notifications endpoint
