@@ -60,8 +60,9 @@ return [
                 'useTLS' => env('PUSHER_SCHEME', 'https') === 'https',
             ],
             'client_options' => [
-                'timeout' => 3.0,
-                'connect_timeout' => 2.0,
+                'timeout' => 5.0,
+                'connect_timeout' => 3.0,
+                'verify' => env('PUSHER_CURL_VERIFY', false),
             ],
         ],
 
