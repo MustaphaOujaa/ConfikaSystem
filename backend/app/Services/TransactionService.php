@@ -69,7 +69,11 @@ class TransactionService
             }
 
             DB::afterCommit(function () use ($transaction) {
-                event(new \App\Events\TransactionCreated($transaction));
+                try {
+                    event(new \App\Events\TransactionCreated($transaction));
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('TransactionCreated broadcast failed: ' . $e->getMessage());
+                }
             });
 
 

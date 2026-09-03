@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\CategoryCreated;
+use App\Events\CategoryDeleted;
+use App\Events\CategoryUpdated;
 use App\Models\Category;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +25,14 @@ class CategoryController extends Controller
             'description' => ['nullable', 'string'],
         ]));
 
+        $category->loadCount('products');
+
+        try {
+            event(new CategoryCreated($category));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('CategoryCreated broadcast failed: ' . $e->getMessage());
+        }
+
         return response()->json($category, 201);
     }
 
@@ -38,12 +49,27 @@ class CategoryController extends Controller
             'description' => ['nullable', 'string'],
         ]));
 
+        $category->loadCount('products');
+
+        try {
+            event(new CategoryUpdated($category));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('CategoryUpdated broadcast failed: ' . $e->getMessage());
+        }
+
         return response()->json($category);
     }
 
     public function destroy(Category $category): JsonResponse
     {
+        $categoryId = $category->id;
         $category->delete();
+
+        try {
+            event(new CategoryDeleted($categoryId));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('CategoryDeleted broadcast failed: ' . $e->getMessage());
+        }
 
         return response()->json(status: 204);
     }

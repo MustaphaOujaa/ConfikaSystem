@@ -26,7 +26,11 @@ class BrandController extends Controller
         $brand = Brand::create($validated);
         $brand->loadCount('products');
 
-        event(new BrandCreated($brand));
+        try {
+            event(new BrandCreated($brand));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('BrandCreated broadcast failed: ' . $e->getMessage());
+        }
 
         return response()->json($brand, 201);
     }
@@ -45,7 +49,11 @@ class BrandController extends Controller
         $brand->update($validated);
         $brand->loadCount('products');
 
-        event(new BrandUpdated($brand));
+        try {
+            event(new BrandUpdated($brand));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('BrandUpdated broadcast failed: ' . $e->getMessage());
+        }
 
         return response()->json($brand);
     }
@@ -55,7 +63,11 @@ class BrandController extends Controller
         $brandId = $brand->id;
         $brand->delete();
 
-        event(new BrandDeleted($brandId));
+        try {
+            event(new BrandDeleted($brandId));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('BrandDeleted broadcast failed: ' . $e->getMessage());
+        }
 
         return response()->json(status: 204);
     }

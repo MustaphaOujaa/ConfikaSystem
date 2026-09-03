@@ -81,7 +81,11 @@ class ProductController extends Controller
         }
 
         $product->refresh()->load(['category', 'brand', 'images']);
-        event(new ProductCreated($product));
+        try {
+            event(new ProductCreated($product));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('ProductCreated broadcast failed: ' . $e->getMessage());
+        }
 
         return response()->json($product, 201);
     }
@@ -147,7 +151,11 @@ class ProductController extends Controller
         }
 
         $product->refresh()->load(['category', 'brand', 'images']);
-        event(new ProductUpdated($product));
+        try {
+            event(new ProductUpdated($product));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('ProductUpdated broadcast failed: ' . $e->getMessage());
+        }
 
         return response()->json($product);
     }
@@ -163,7 +171,11 @@ class ProductController extends Controller
         $productId = $product->id;
         $product->delete();
 
-        event(new ProductDeleted($productId));
+        try {
+            event(new ProductDeleted($productId));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('ProductDeleted broadcast failed: ' . $e->getMessage());
+        }
 
         return response()->json(status: 204);
     }

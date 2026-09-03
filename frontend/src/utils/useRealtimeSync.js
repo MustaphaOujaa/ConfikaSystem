@@ -34,6 +34,11 @@ export function useRealtimeSync() {
       dispatch(apiSlice.util.invalidateTags(['Brand', 'Product']));
     };
 
+    // Handler for any category changes
+    const handleCategoryChange = () => {
+      dispatch(apiSlice.util.invalidateTags(['Category', 'Product']));
+    };
+
     inventoryChannel
       .listen('.product.created', handleProductChange)
       .listen('ProductCreated', handleProductChange)
@@ -46,7 +51,13 @@ export function useRealtimeSync() {
       .listen('.brand.updated', handleBrandChange)
       .listen('BrandUpdated', handleBrandChange)
       .listen('.brand.deleted', handleBrandChange)
-      .listen('BrandDeleted', handleBrandChange);
+      .listen('BrandDeleted', handleBrandChange)
+      .listen('.category.created', handleCategoryChange)
+      .listen('CategoryCreated', handleCategoryChange)
+      .listen('.category.updated', handleCategoryChange)
+      .listen('CategoryUpdated', handleCategoryChange)
+      .listen('.category.deleted', handleCategoryChange)
+      .listen('CategoryDeleted', handleCategoryChange);
 
     // Subscribe to transactions channel
     const transactionsChannel = echo.channel('transactions');
@@ -71,6 +82,12 @@ export function useRealtimeSync() {
       inventoryChannel.stopListening('BrandUpdated');
       inventoryChannel.stopListening('.brand.deleted');
       inventoryChannel.stopListening('BrandDeleted');
+      inventoryChannel.stopListening('.category.created');
+      inventoryChannel.stopListening('CategoryCreated');
+      inventoryChannel.stopListening('.category.updated');
+      inventoryChannel.stopListening('CategoryUpdated');
+      inventoryChannel.stopListening('.category.deleted');
+      inventoryChannel.stopListening('CategoryDeleted');
       transactionsChannel.stopListening('.transaction.created');
       transactionsChannel.stopListening('TransactionCreated');
       echo.leaveChannel('inventory');
