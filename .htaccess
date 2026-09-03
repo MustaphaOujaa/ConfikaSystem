@@ -1,9 +1,8 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    
+    Options +FollowSymLinks -Indexes
 
-    RewriteCond %{REQUEST_FILENAME} -f [OR]
-    RewriteCond %{REQUEST_FILENAME} -d
-    RewriteRule ^ - [L]
-
-    RewriteRule ^(.*)$ backend/public/index.php [L]
+    RewriteCond %{REQUEST_URI} !^/backend/public/
+    RewriteRule ^(.*)$ backend/public/$1 [L]
 </IfModule>
