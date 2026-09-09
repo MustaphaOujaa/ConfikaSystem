@@ -13,7 +13,7 @@ export const apiSlice = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Product', 'Category', 'Brand', 'Transaction', 'LowStock', 'DailyReport'],
+  tagTypes: ['Product', 'Category', 'Brand', 'Transaction', 'LowStock', 'DailyReport', 'Cashier'],
   endpoints: (builder) => ({
     // Auth
     login: builder.mutation({
@@ -21,6 +21,85 @@ export const apiSlice = createApi({
         url: '/login',
         method: 'POST',
         body: credentials,
+      }),
+    }),
+    forgotPassword: builder.mutation({
+      query: (data) => ({
+        url: '/forgot-password',
+        method: 'POST',
+        body: data,
+      }),
+    }),
+    verifyOtp: builder.mutation({
+      query: (data) => ({
+        url: '/verify-otp',
+        method: 'POST',
+        body: data,
+      }),
+    }),
+    resetPassword: builder.mutation({
+      query: (data) => ({
+        url: '/reset-password',
+        method: 'POST',
+        body: data,
+      }),
+    }),
+
+    // Cashier Management (Admin)
+    getCashiers: builder.query({
+      query: () => '/admin/cashiers',
+      providesTags: ['Cashier'],
+    }),
+    createCashier: builder.mutation({
+      query: (data) => ({
+        url: '/admin/cashiers',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Cashier'],
+    }),
+    updateCashier: builder.mutation({
+      query: ({ id, ...data }) => ({
+        url: `/admin/cashiers/${id}`,
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['Cashier'],
+    }),
+    deleteCashier: builder.mutation({
+      query: (id) => ({
+        url: `/admin/cashiers/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Cashier'],
+    }),
+
+    // Admin Profile & Security (OTP Protected)
+    requestAdminEmailOtp: builder.mutation({
+      query: (data) => ({
+        url: '/admin/request-email-otp',
+        method: 'POST',
+        body: data,
+      }),
+    }),
+    updateAdminEmail: builder.mutation({
+      query: (data) => ({
+        url: '/admin/update-email',
+        method: 'POST',
+        body: data,
+      }),
+    }),
+    requestAdminPasswordOtp: builder.mutation({
+      query: () => ({
+        url: '/admin/request-password-otp',
+        method: 'POST',
+      }),
+    }),
+    updateAdminPassword: builder.mutation({
+      query: (data) => ({
+        url: '/admin/update-password',
+        method: 'POST',
+        body: data,
       }),
     }),
 
@@ -197,6 +276,17 @@ export const apiSlice = createApi({
 
 export const {
   useLoginMutation,
+  useForgotPasswordMutation,
+  useVerifyOtpMutation,
+  useResetPasswordMutation,
+  useGetCashiersQuery,
+  useCreateCashierMutation,
+  useUpdateCashierMutation,
+  useDeleteCashierMutation,
+  useRequestAdminEmailOtpMutation,
+  useUpdateAdminEmailMutation,
+  useRequestAdminPasswordOtpMutation,
+  useUpdateAdminPasswordMutation,
   useGetDailyReportQuery,
   useGetMonthlyReportQuery,
   useGetProductsQuery,

@@ -10,10 +10,27 @@ use App\Http\Controllers\ProductImageController;
 use App\Http\Controllers\ScannerController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\BackupController;
+use App\Http\Controllers\AdminProfileController;
+use App\Http\Controllers\AdminCashierController;
 
+// Public Authentication & OTP Password Reset routes
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 Route::middleware('auth:sanctum')->group(function () {
+    // Admin Cashier Management routes (No OTP, fast CRUD)
+    Route::get('/admin/cashiers', [AdminCashierController::class, 'index']);
+    Route::post('/admin/cashiers', [AdminCashierController::class, 'store']);
+    Route::put('/admin/cashiers/{cashier}', [AdminCashierController::class, 'update']);
+    Route::delete('/admin/cashiers/{cashier}', [AdminCashierController::class, 'destroy']);
+
+    // Admin Profile & Security routes (Protected by OTP)
+    Route::post('/admin/request-email-otp', [AdminProfileController::class, 'requestEmailOtp']);
+    Route::post('/admin/update-email', [AdminProfileController::class, 'updateEmail']);
+    Route::post('/admin/request-password-otp', [AdminProfileController::class, 'requestPasswordOtp']);
+    Route::post('/admin/update-password', [AdminProfileController::class, 'updatePassword']);
     // Backup route
     Route::post('/backup/google-drive', [BackupController::class, 'backupToGoogleDrive']);
 
