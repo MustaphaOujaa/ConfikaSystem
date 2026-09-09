@@ -15,7 +15,7 @@ class AdminUserSeeder extends Seeder
     {
         // 1. Admin Account (Full access to Daily Reports, Net Profits & Margins, Catalog, POS)
         User::updateOrCreate(
-            ['email' => 'younesabourrig@gmail.com'],
+            ['email' => 'confikam@gmail.com'],
             [
                 'name' => 'Admin',
                 'password' => Hash::make('admin'),
