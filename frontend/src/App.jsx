@@ -9,6 +9,8 @@ import ProductsPage from './pages/ProductsPage';
 import CategoriesPage from './pages/CategoriesPage';
 import PosPage from './pages/PosPage';
 import TransactionsPage from './pages/TransactionsPage';
+import CashiersPage from './pages/CashiersPage';
+import SecurityPage from './pages/SecurityPage';
 
 export default function App() {
   const user = useSelector(selectCurrentUser);
@@ -28,6 +30,14 @@ export default function App() {
         <Route path="categories" element={<CategoriesPage />} />
         <Route path="pos" element={<PosPage />} />
         <Route path="transactions" element={<TransactionsPage />} />
+        <Route 
+          path="cashiers" 
+          element={isAdmin ? <CashiersPage /> : <Navigate to="/pos" replace />} 
+        />
+        <Route 
+          path="security" 
+          element={isAdmin ? <SecurityPage /> : <Navigate to="/pos" replace />} 
+        />
       </Route>
 
       <Route path="*" element={<Navigate to={isAdmin ? "/" : "/pos"} replace />} />

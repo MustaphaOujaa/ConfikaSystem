@@ -10,6 +10,10 @@ export default function Navbar({ onToggleSidebar }) {
     switch (path) {
       case '/':
         return 'Tableau de Bord';
+      case '/cashiers':
+        return 'Gestion des Caissiers';
+      case '/security':
+        return 'Sécurité & Accès Admin';
       case '/products':
         return 'Produits & Stock';
       case '/categories':

@@ -9,7 +9,9 @@ import {
   Receipt, 
   LogOut,
   AlertTriangle,
-  X
+  X,
+  ShieldCheck,
+  Users
 } from 'lucide-react';
 import { logout, selectCurrentUser } from '../../store/authSlice';
 import { useGetLowStockAlertsQuery } from '../../api/apiSlice';
@@ -35,10 +37,12 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
 
   const navItems = [
     ...(isAdmin ? [{ label: 'Tableau de bord', path: '/', icon: LayoutDashboard }] : []),
+    ...(isAdmin ? [{ label: 'Gestion des Caissiers', path: '/cashiers', icon: Users }] : []),
     { label: 'Caisse / Vente (POS)', path: '/pos', icon: ShoppingCart },
     { label: 'Gestion des Produits', path: '/products', icon: Package },
     { label: 'Catégories & Marques', path: '/categories', icon: Tags },
     { label: 'Historique des Ventes', path: '/transactions', icon: Receipt },
+    ...(isAdmin ? [{ label: 'Sécurité & Accès', path: '/security', icon: ShieldCheck }] : []),
   ];
 
   return (
@@ -227,6 +231,7 @@ const styles = {
     fontSize: '11px',
     color: '#6b7280',
   },
+
   logoutBtn: {
     width: '100%',
     display: 'flex',

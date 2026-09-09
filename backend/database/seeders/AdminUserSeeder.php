@@ -15,9 +15,9 @@ class AdminUserSeeder extends Seeder
     {
         // 1. Admin Account (Full access to Daily Reports, Net Profits & Margins, Catalog, POS)
         User::updateOrCreate(
-            ['email' => 'admin@gmail.com'],
+            ['email' => 'younesabourrig@gmail.com'],
             [
-                'name' => 'admin',
+                'name' => 'Admin',
                 'password' => Hash::make('admin'),
                 'role' => 'admin',
             ]
@@ -25,15 +25,15 @@ class AdminUserSeeder extends Seeder
 
         // 2. Caissier Account (Standard cashier: POS sales, products catalog/crud, transactions without profit figures)
         User::updateOrCreate(
-            ['email' => 'caissier@gmail.com'],
+            ['email' => 'caissier@email.com'],
             [
-                'name' => 'caissier',
+                'name' => 'Caissier',
                 'password' => Hash::make('caissier'),
                 'role' => 'caissier',
             ]
         );
 
-        // Clean up old default user if present
-        User::where('email', 'admin@example.com')->delete();
+        // Clean up old default users if present
+        User::whereIn('email', ['admin@gmail.com', 'caissier@gmail.com', 'admin@example.com'])->delete();
     }
 }
