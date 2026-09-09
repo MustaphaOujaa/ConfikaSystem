@@ -71,7 +71,7 @@ class AuthController extends Controller
         } catch (\Throwable $e) {
             report($e);
             return response()->json([
-                'message' => 'Impossible d\'envoyer l\'email pour le moment. Veuillez vérifier la connexion SMTP.',
+                'message' => 'Impossible d\'envoyer l\'email pour le moment. Veuillez vérifier la configuration de messagerie.',
                 'error' => $e->getMessage(),
             ], 500);
         }
