@@ -57,7 +57,7 @@ export default function ProductsPage() {
 
   // RTK Query hooks
   const { data: productsData, isLoading: loadingProducts, error: fetchError } = useGetProductsQuery({ page });
-  const { data: categoriesData } = useGetCategoriesQuery();
+  const { data: categoriesData } = useGetCategoriesQuery({ all: true });
   const { data: brandsData } = useGetBrandsQuery();
   
   const [createProduct, { isLoading: creating }] = useCreateProductMutation();

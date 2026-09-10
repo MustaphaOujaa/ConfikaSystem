@@ -12,9 +12,15 @@ use Illuminate\Validation\Rule;
 
 class CategoryController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(Category::withCount('products')->latest()->paginate(10));
+        $query = Category::withCount('products')->latest();
+
+        if ($request->boolean('all')) {
+            return response()->json($query->get());
+        }
+
+        return response()->json($query->paginate(10));
     }
 
     public function store(Request $request): JsonResponse
