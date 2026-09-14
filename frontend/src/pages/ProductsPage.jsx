@@ -31,7 +31,23 @@ export default function ProductsPage() {
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [sortBy, setSortBy] = useState('latest');
+
+  // Debounce search input to avoid querying on every single keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Reset pagination to page 1 whenever filters or sorting changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, selectedCategory, selectedBrand, sortBy]);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -56,8 +72,14 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState(null);
   const [formError, setFormError] = useState('');
 
-  // RTK Query hooks
-  const { data: productsData, isLoading: loadingProducts, error: fetchError } = useGetProductsQuery({ page });
+  // RTK Query hooks - backend handles filtering, search, sorting and pagination
+  const { data: productsData, isLoading: loadingProducts, error: fetchError } = useGetProductsQuery({ 
+    page,
+    category_id: selectedCategory,
+    brand_id: selectedBrand,
+    search: debouncedSearch,
+    sort_by: sortBy,
+  });
   const { data: categoriesData } = useGetCategoriesQuery({ all: true });
   const { data: brandsData } = useGetBrandsQuery();
   
@@ -73,18 +95,6 @@ export default function ProductsPage() {
     lastPage: productsData.last_page || 1,
     total: productsData.total || products.length,
   } : { currentPage: 1, lastPage: 1, total: 0 };
-
-  const filteredProducts = products.filter((p) => {
-    if (!search.trim()) return true;
-    const query = search.toLowerCase().trim();
-    const normalizedQuery = normalizeBarcode(query).toLowerCase();
-    const matchesSearch = 
-      (p.name && p.name.toLowerCase().includes(query)) || 
-      (p.barcode && p.barcode.toLowerCase().includes(query)) ||
-      (p.barcode && normalizedQuery && p.barcode.toLowerCase().includes(normalizedQuery));
-    const matchesCategory = !selectedCategory || String(p.category_id) === String(selectedCategory);
-    return matchesSearch && matchesCategory;
-  });
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -260,6 +270,30 @@ export default function ProductsPage() {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+          <select
+            value={selectedBrand}
+            onChange={(e) => setSelectedBrand(e.target.value)}
+            style={styles.selectFilter}
+          >
+            <option value="">Toutes les marques</option>
+            {brands.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            style={styles.selectFilter}
+          >
+            <option value="latest">Trier : Plus récents</option>
+            <option value="oldest">Trier : Plus anciens</option>
+            <option value="name_asc">Nom (A - Z)</option>
+            <option value="name_desc">Nom (Z - A)</option>
+            <option value="price_asc">Prix (Croissant)</option>
+            <option value="price_desc">Prix (Décroissant)</option>
+            <option value="stock_asc">Stock (Croissant)</option>
+            <option value="stock_desc">Stock (Décroissant)</option>
+          </select>
         </div>
 
         {isAdmin && (
@@ -276,8 +310,8 @@ export default function ProductsPage() {
           <div style={styles.loading}>Chargement de l'inventaire...</div>
         ) : fetchError ? (
           <div style={styles.errorState}>Erreur lors du chargement des produits. Vérifiez le serveur API.</div>
-        ) : filteredProducts.length === 0 ? (
-          <div style={styles.emptyState}>Aucun produit trouvé. Ajoutez votre premier produit.</div>
+        ) : products.length === 0 ? (
+          <div style={styles.emptyState}>Aucun produit trouvé.</div>
         ) : (
           <table style={styles.table}>
             <thead>
@@ -295,7 +329,7 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((p) => {
+              {products.map((p) => {
                 const primaryImage = p.images && p.images.length > 0 ? p.images[0].path : null;
                 const isLowStock = p.quantity <= 5;
                 const gain = calculateGain(p.price, p.cost_price);

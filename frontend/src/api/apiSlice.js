@@ -116,7 +116,13 @@ export const apiSlice = createApi({
     // Products
     getProducts: builder.query({
       query: (params = {}) => {
-        const queryParams = new URLSearchParams(params).toString();
+        const cleanParams = Object.entries(params).reduce((acc, [key, val]) => {
+          if (val !== undefined && val !== null && val !== '') {
+            acc[key] = val;
+          }
+          return acc;
+        }, {});
+        const queryParams = new URLSearchParams(cleanParams).toString();
         return `/products${queryParams ? `?${queryParams}` : ''}`;
       },
       providesTags: (result) =>

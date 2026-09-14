@@ -13,9 +13,74 @@ use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(Product::with(['category', 'brand', 'images'])->latest()->paginate());
+        $query = Product::with(['category', 'brand', 'images']);
+
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->input('category_id'));
+        }
+
+        if ($request->filled('brand_id')) {
+            $query->where('brand_id', $request->input('brand_id'));
+        }
+
+        if ($request->filled('search')) {
+            $search = trim($request->input('search'));
+            // Normalize AZERTY barcode characters if barcode scanner typed into search
+            $azertyMap = [
+                '&' => '1', 'é' => '2', 'É' => '2', '"' => '3', "'" => '4',
+                '(' => '5', '-' => '6', '§' => '6', 'è' => '7', 'È' => '7',
+                '_' => '8', 'ç' => '9', 'Ç' => '9', 'à' => '0', 'À' => '0',
+            ];
+            $normalizedSearch = strtr($search, $azertyMap);
+
+            $query->where(function ($q) use ($search, $normalizedSearch) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('barcode', 'like', "%{$search}%");
+                if ($normalizedSearch !== $search) {
+                    $q->orWhere('barcode', 'like', "%{$normalizedSearch}%");
+                }
+            });
+        }
+
+        $sortBy = $request->input('sort_by', 'latest');
+        switch ($sortBy) {
+            case 'name_asc':
+                $query->orderBy('name', 'asc');
+                break;
+            case 'name_desc':
+                $query->orderBy('name', 'desc');
+                break;
+            case 'price_asc':
+                $query->orderBy('price', 'asc');
+                break;
+            case 'price_desc':
+                $query->orderBy('price', 'desc');
+                break;
+            case 'stock_asc':
+            case 'quantity_asc':
+                $query->orderBy('quantity', 'asc');
+                break;
+            case 'stock_desc':
+            case 'quantity_desc':
+                $query->orderBy('quantity', 'desc');
+                break;
+            case 'oldest':
+                $query->oldest();
+                break;
+            case 'latest':
+            default:
+                $query->latest();
+                break;
+        }
+
+        $perPage = (int) $request->input('per_page', 15);
+        if ($perPage <= 0 || $perPage > 100) {
+            $perPage = 15;
+        }
+
+        return response()->json($query->paginate($perPage));
     }
 
     public function lowStockAlerts(): JsonResponse
