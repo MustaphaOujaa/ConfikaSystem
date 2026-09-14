@@ -43,7 +43,7 @@ class ProductController extends Controller
             'category_id' => ['required', 'exists:categories,id'],
             'brand_id'    => ['nullable', 'exists:brands,id'],
             'name'        => ['required', 'string', 'max:255'],
-            'barcode'     => ['required', 'string', 'max:255', 'unique:products,barcode'],
+            'barcode'     => ['nullable', 'string', 'max:255', 'unique:products,barcode'],
             'description' => ['nullable', 'string'],
             'cost_price'  => ['nullable', 'numeric', 'min:0'],
             'price'       => ['required', 'numeric', 'min:0'],
@@ -56,7 +56,7 @@ class ProductController extends Controller
             'category_id' => $validated['category_id'],
             'brand_id'    => $validated['brand_id'] ?? null,
             'name'        => $validated['name'],
-            'barcode'     => $validated['barcode'],
+            'barcode'     => !empty($validated['barcode']) ? $validated['barcode'] : null,
             'description' => $validated['description'] ?? null,
             'cost_price'  => $validated['cost_price'] ?? 0,
             'price'       => $validated['price'],
@@ -105,7 +105,7 @@ class ProductController extends Controller
                 'category_id' => ['sometimes', 'required', 'exists:categories,id'],
                 'brand_id'    => ['nullable', 'exists:brands,id'],
                 'name'        => ['sometimes', 'required', 'string', 'max:255'],
-                'barcode'     => ['sometimes', 'required', 'string', 'max:255', Rule::unique('products', 'barcode')->ignore($product)],
+                'barcode'     => ['sometimes', 'nullable', 'string', 'max:255', Rule::unique('products', 'barcode')->ignore($product)],
                 'description' => ['nullable', 'string'],
                 'cost_price'  => ['sometimes', 'nullable', 'numeric', 'min:0'],
                 'price'       => ['sometimes', 'required', 'numeric', 'min:0'],
@@ -114,6 +114,10 @@ class ProductController extends Controller
                 'image_url'   => ['nullable', 'string'],
             ]);
 
+            if (array_key_exists('barcode', $validated)) {
+                $validated['barcode'] = !empty($validated['barcode']) ? $validated['barcode'] : null;
+            }
+
             $product->update($validated);
         } else {
             // Caissier: can update product info, quantity, and image, but NOT prices
@@ -121,13 +125,17 @@ class ProductController extends Controller
                 'category_id' => ['sometimes', 'required', 'exists:categories,id'],
                 'brand_id'    => ['nullable', 'exists:brands,id'],
                 'name'        => ['sometimes', 'required', 'string', 'max:255'],
-                'barcode'     => ['sometimes', 'required', 'string', 'max:255', Rule::unique('products', 'barcode')->ignore($product)],
+                'barcode'     => ['sometimes', 'nullable', 'string', 'max:255', Rule::unique('products', 'barcode')->ignore($product)],
                 'description' => ['nullable', 'string'],
                 'quantity'    => ['sometimes', 'required', 'integer', 'min:0'],
                 'image'       => ['nullable', 'image', 'max:5120'],
                 'image_url'   => ['nullable', 'string'],
                 // price and cost_price are intentionally excluded — caissier cannot change pricing
             ]);
+
+            if (array_key_exists('barcode', $validated)) {
+                $validated['barcode'] = !empty($validated['barcode']) ? $validated['barcode'] : null;
+            }
 
             $product->update($validated);
         }

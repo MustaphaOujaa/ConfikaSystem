@@ -79,9 +79,9 @@ export default function ProductsPage() {
     const query = search.toLowerCase().trim();
     const normalizedQuery = normalizeBarcode(query).toLowerCase();
     const matchesSearch = 
-      p.name.toLowerCase().includes(query) || 
-      p.barcode.toLowerCase().includes(query) ||
-      (normalizedQuery && p.barcode.toLowerCase().includes(normalizedQuery));
+      (p.name && p.name.toLowerCase().includes(query)) || 
+      (p.barcode && p.barcode.toLowerCase().includes(query)) ||
+      (p.barcode && normalizedQuery && p.barcode.toLowerCase().includes(normalizedQuery));
     const matchesCategory = !selectedCategory || String(p.category_id) === String(selectedCategory);
     return matchesSearch && matchesCategory;
   });
@@ -175,7 +175,7 @@ export default function ProductsPage() {
     payload.append('name', formData.name);
     payload.append('category_id', formData.category_id);
     if (formData.brand_id) payload.append('brand_id', formData.brand_id);
-    payload.append('barcode', formData.barcode);
+    payload.append('barcode', formData.barcode ? formData.barcode.trim() : '');
     payload.append('cost_price', formData.cost_price || 0);
     payload.append('price', formData.price);
     payload.append('quantity', formData.quantity);
@@ -186,7 +186,7 @@ export default function ProductsPage() {
       await createProduct(payload).unwrap();
       setIsAddModalOpen(false);
     } catch (err) {
-      setFormError(err?.data?.message || 'Échec de la création du produit. Vérifiez l\'unicité du code-barres.');
+      setFormError(err?.data?.message || 'Échec de la création du produit.');
     }
   };
 
@@ -199,7 +199,7 @@ export default function ProductsPage() {
     payload.append('name', formData.name);
     payload.append('category_id', formData.category_id);
     if (formData.brand_id) payload.append('brand_id', formData.brand_id);
-    payload.append('barcode', formData.barcode);
+    payload.append('barcode', formData.barcode ? formData.barcode.trim() : '');
     payload.append('quantity', formData.quantity);
     if (formData.description) payload.append('description', formData.description);
     if (imageFile) payload.append('image', imageFile);
@@ -323,7 +323,11 @@ export default function ProductsPage() {
                       {p.description && <div style={styles.productDesc}>{p.description}</div>}
                     </td>
                     <td style={styles.td}>
-                      <code style={styles.barcodeCode}>{p.barcode}</code>
+                      {p.barcode ? (
+                        <code style={styles.barcodeCode}>{p.barcode}</code>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontSize: '13px' }}>—</span>
+                      )}
                     </td>
                     <td style={styles.td}>{p.category?.name || '—'}</td>
                     <td style={styles.td}>{p.brand?.name || '—'}</td>
@@ -347,10 +351,12 @@ export default function ProductsPage() {
                     </td>
                     <td style={{ ...styles.td, textAlign: 'right' }}>
                       <div style={styles.actionGroup}>
-                        {/* Barcode label: visible to all */}
-                        <button onClick={() => handleOpenBarcodeLabel(p)} style={styles.iconBtn} title="Imprimer l'étiquette code-barres">
-                          <BarcodeIcon size={16} color="#4f46e5" />
-                        </button>
+                        {/* Barcode label: visible only when product has barcode */}
+                        {p.barcode && (
+                          <button onClick={() => handleOpenBarcodeLabel(p)} style={styles.iconBtn} title="Imprimer l'étiquette code-barres">
+                            <BarcodeIcon size={16} color="#4f46e5" />
+                          </button>
+                        )}
                         {/* Edit: visible to all (caissier sees info-only form, admin sees full form) */}
                         <button onClick={() => handleOpenEdit(p)} style={styles.iconBtn} title="Modifier le produit">
                           <Edit size={16} />
@@ -396,10 +402,9 @@ export default function ProductsPage() {
 
           <div className="responsive-form-row" style={styles.formRow}>
             <div style={{ ...styles.formGroup, flex: 1 }}>
-              <label style={styles.label}>Code-barres / SKU * (Scanner USB actif)</label>
+              <label style={styles.label}>Code-barres / SKU (optionnel) (Scanner USB actif)</label>
               <input
                 type="text"
-                required
                 value={formData.barcode}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -408,7 +413,7 @@ export default function ProductsPage() {
                 onBlur={(e) => {
                   setFormData({ ...formData, barcode: normalizeBarcode(e.target.value) });
                 }}
-                placeholder="ex: 123456789"
+                placeholder="ex: 123456789 (optionnel)"
                 style={styles.input}
               />
             </div>
@@ -552,10 +557,9 @@ export default function ProductsPage() {
 
           <div className="responsive-form-row" style={styles.formRow}>
             <div style={{ ...styles.formGroup, flex: 1 }}>
-              <label style={styles.label}>Code-barres * (Scanner USB actif)</label>
+              <label style={styles.label}>Code-barres / SKU (optionnel) (Scanner USB actif)</label>
               <input
                 type="text"
-                required
                 value={formData.barcode}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -564,6 +568,7 @@ export default function ProductsPage() {
                 onBlur={(e) => {
                   setFormData({ ...formData, barcode: normalizeBarcode(e.target.value) });
                 }}
+                placeholder="ex: 123456789 (optionnel)"
                 style={styles.input}
               />
             </div>

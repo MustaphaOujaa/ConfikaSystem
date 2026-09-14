@@ -141,4 +141,53 @@ class ProductRoleTest extends TestCase
         $response->assertForbidden();
         $this->assertDatabaseHas('products', ['id' => $product->id]);
     }
+
+    public function test_admin_can_create_product_without_barcode(): void
+    {
+        $payload = [
+            'name' => 'Produit Sans Code-barres',
+            'category_id' => $this->category->id,
+            'cost_price' => 15.00,
+            'price' => 25.00,
+            'quantity' => 20,
+        ];
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/products', $payload);
+
+        $response->assertCreated()
+            ->assertJsonPath('name', 'Produit Sans Code-barres')
+            ->assertJsonPath('barcode', null);
+
+        $this->assertDatabaseHas('products', [
+            'name' => 'Produit Sans Code-barres',
+            'barcode' => null,
+        ]);
+    }
+
+    public function test_admin_can_create_multiple_products_without_barcode_without_unique_conflict(): void
+    {
+        $payload1 = [
+            'name' => 'Produit Sans Barcode 1',
+            'category_id' => $this->category->id,
+            'price' => 30.00,
+            'quantity' => 10,
+        ];
+
+        $payload2 = [
+            'name' => 'Produit Sans Barcode 2',
+            'category_id' => $this->category->id,
+            'barcode' => '',
+            'price' => 40.00,
+            'quantity' => 5,
+        ];
+
+        $res1 = $this->actingAs($this->admin, 'sanctum')->postJson('/api/products', $payload1);
+        $res1->assertCreated();
+
+        $res2 = $this->actingAs($this->admin, 'sanctum')->postJson('/api/products', $payload2);
+        $res2->assertCreated();
+
+        $this->assertDatabaseCount('products', 2);
+    }
 }

@@ -49,8 +49,8 @@ export default function DashboardPage() {
     if (!soldSearch.trim()) return true;
     const q = soldSearch.toLowerCase();
     return (
-      item.name.toLowerCase().includes(q) ||
-      item.barcode.toLowerCase().includes(q) ||
+      (item.name && item.name.toLowerCase().includes(q)) ||
+      (item.barcode && item.barcode.toLowerCase().includes(q)) ||
       (item.category && item.category.toLowerCase().includes(q))
     );
   });

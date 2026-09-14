@@ -59,9 +59,9 @@ export default function PosPage() {
     if (!catalogSearch.trim()) return true;
     const query = catalogSearch.toLowerCase().trim();
     return (
-      p.name.toLowerCase().includes(query) ||
-      p.barcode.toLowerCase().includes(query) ||
-      (normalizeBarcode(query) && p.barcode.toLowerCase().includes(normalizeBarcode(query).toLowerCase())) ||
+      (p.name && p.name.toLowerCase().includes(query)) ||
+      (p.barcode && p.barcode.toLowerCase().includes(query)) ||
+      (p.barcode && normalizeBarcode(query) && p.barcode.toLowerCase().includes(normalizeBarcode(query).toLowerCase())) ||
       (p.category?.name && p.category.name.toLowerCase().includes(query))
     );
   });
@@ -138,9 +138,8 @@ export default function PosPage() {
     // 1. Check loaded products first (check barcode with raw & normalized, or product name)
     const exactMatch = allProducts.find(
       (p) =>
-        p.barcode === rawQuery ||
-        p.barcode === normalizedQuery ||
-        p.name.toLowerCase() === rawQuery.toLowerCase()
+        (p.barcode && (p.barcode === rawQuery || p.barcode === normalizedQuery)) ||
+        (p.name && p.name.toLowerCase() === rawQuery.toLowerCase())
     );
 
     if (exactMatch) {

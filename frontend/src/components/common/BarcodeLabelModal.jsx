@@ -215,62 +215,75 @@ export default function BarcodeLabelModal({ isOpen, onClose, product }) {
     <Modal isOpen={isOpen} onClose={onClose} title="Générateur d'Étiquette Code-Barres">
       <div style={styles.modalContent}>
         {/* Preview Card */}
-        <div style={styles.previewCard}>
-          <div style={styles.storeName}>CONFIKA SYSTEM</div>
-          <div style={styles.prodName}>{product.name}</div>
-          {product.brand && <div style={styles.prodBrand}>{product.brand.name}</div>}
+        {product.barcode ? (
+          <>
+            <div style={styles.previewCard}>
+              <div style={styles.storeName}>CONFIKA SYSTEM</div>
+              <div style={styles.prodName}>{product.name}</div>
+              {product.brand && <div style={styles.prodBrand}>{product.brand.name}</div>}
 
-          {/* SVG Barcode */}
-          <div style={styles.svgContainer}>
-            <svg
-              id="product-barcode-svg"
-              viewBox={`0 0 ${svgData?.totalWidth || 200} 70`}
-              style={styles.svg}
-            >
-              {svgData?.elements}
-            </svg>
-          </div>
+              {/* SVG Barcode */}
+              <div style={styles.svgContainer}>
+                <svg
+                  id="product-barcode-svg"
+                  viewBox={`0 0 ${svgData?.totalWidth || 200} 70`}
+                  style={styles.svg}
+                >
+                  {svgData?.elements}
+                </svg>
+              </div>
 
-          <div style={styles.barcodeText}>
-            <span>{product.barcode}</span>
-            <button
-              onClick={handleCopyBarcode}
-              title="Copier le code-barres"
-              style={styles.copyBtn}
-            >
-              {copied ? <Check size={13} color="#16a34a" /> : <Copy size={13} />}
-            </button>
-          </div>
+              <div style={styles.barcodeText}>
+                <span>{product.barcode}</span>
+                <button
+                  onClick={handleCopyBarcode}
+                  title="Copier le code-barres"
+                  style={styles.copyBtn}
+                >
+                  {copied ? <Check size={13} color="#16a34a" /> : <Copy size={13} />}
+                </button>
+              </div>
 
-          <div style={styles.priceTag}>
-            {Number(product.price).toFixed(2)} MAD
-          </div>
-        </div>
+              <div style={styles.priceTag}>
+                {Number(product.price).toFixed(2)} MAD
+              </div>
+            </div>
 
-        {/* Print Controls */}
-        <div style={styles.controls}>
-          <div style={styles.copiesInputWrapper}>
-            <label style={styles.label}>Nombre d'exemplaires à imprimer :</label>
-            <input
-              type="number"
-              min="1"
-              max="100"
-              value={printCopies}
-              onChange={(e) => setPrintCopies(Math.max(1, parseInt(e.target.value) || 1))}
-              style={styles.copiesInput}
-            />
-          </div>
+            {/* Print Controls */}
+            <div style={styles.controls}>
+              <div style={styles.copiesInputWrapper}>
+                <label style={styles.label}>Nombre d'exemplaires à imprimer :</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={printCopies}
+                  onChange={(e) => setPrintCopies(Math.max(1, parseInt(e.target.value) || 1))}
+                  style={styles.copiesInput}
+                />
+              </div>
 
-          <div style={styles.actionRow}>
+              <div style={styles.actionRow}>
+                <button onClick={onClose} style={styles.cancelBtn}>
+                  Fermer
+                </button>
+                <button onClick={handlePrint} style={styles.printBtn}>
+                  <Printer size={16} style={{ marginRight: '6px' }} />
+                  Imprimer les Étiquettes ({printCopies})
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{ padding: '30px', textAlign: 'center' }}>
+            <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>
+              Ce produit ne possède aucun code-barres enregistré.
+            </p>
             <button onClick={onClose} style={styles.cancelBtn}>
               Fermer
             </button>
-            <button onClick={handlePrint} style={styles.printBtn}>
-              <Printer size={16} style={{ marginRight: '6px' }} />
-              Imprimer les Étiquettes ({printCopies})
-            </button>
           </div>
-        </div>
+        )}
       </div>
     </Modal>
   );
