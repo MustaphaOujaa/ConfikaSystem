@@ -23,6 +23,7 @@ import Pagination from '../components/common/Pagination';
 import BarcodeLabelModal from '../components/common/BarcodeLabelModal';
 import { playSuccessBeep } from '../utils/audio';
 import { selectCurrentUser } from '../store/authSlice';
+import { decodeScannerKey, normalizeBarcode, isAzertyBarcode } from '../utils/barcode';
 
 export default function ProductsPage() {
   const user = useSelector(selectCurrentUser);
@@ -74,9 +75,13 @@ export default function ProductsPage() {
   } : { currentPage: 1, lastPage: 1, total: 0 };
 
   const filteredProducts = products.filter((p) => {
-    const matchesSearch = !search || 
-      p.name.toLowerCase().includes(search.toLowerCase()) || 
-      p.barcode.toLowerCase().includes(search.toLowerCase());
+    if (!search.trim()) return true;
+    const query = search.toLowerCase().trim();
+    const normalizedQuery = normalizeBarcode(query).toLowerCase();
+    const matchesSearch = 
+      p.name.toLowerCase().includes(query) || 
+      p.barcode.toLowerCase().includes(query) ||
+      (normalizedQuery && p.barcode.toLowerCase().includes(normalizedQuery));
     const matchesCategory = !selectedCategory || String(p.category_id) === String(selectedCategory);
     return matchesSearch && matchesCategory;
   });
@@ -99,15 +104,15 @@ export default function ProductsPage() {
     const handleScannerKeyDown = (e) => {
       const currentTime = Date.now();
       const interval = currentTime - lastKeyTime;
-      const char = e.key;
+      lastKeyTime = currentTime;
 
       if (interval > 120) {
         buffer = '';
       }
-      lastKeyTime = currentTime;
 
-      if (char === 'Enter') {
-        const code = buffer.trim();
+      if (e.key === 'Enter') {
+        const rawCode = buffer.trim();
+        const code = normalizeBarcode(rawCode);
         if (code.length >= 2) {
           e.preventDefault();
           e.stopPropagation();
@@ -115,8 +120,11 @@ export default function ProductsPage() {
           playSuccessBeep();
           buffer = '';
         }
-      } else if (char.length === 1) {
-        buffer += char;
+      } else {
+        const decodedChar = decodeScannerKey(e);
+        if (decodedChar) {
+          buffer += decodedChar;
+        }
       }
     };
 
@@ -393,7 +401,13 @@ export default function ProductsPage() {
                 type="text"
                 required
                 value={formData.barcode}
-                onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData({ ...formData, barcode: isAzertyBarcode(val) ? normalizeBarcode(val) : val });
+                }}
+                onBlur={(e) => {
+                  setFormData({ ...formData, barcode: normalizeBarcode(e.target.value) });
+                }}
                 placeholder="ex: 123456789"
                 style={styles.input}
               />
@@ -543,7 +557,13 @@ export default function ProductsPage() {
                 type="text"
                 required
                 value={formData.barcode}
-                onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData({ ...formData, barcode: isAzertyBarcode(val) ? normalizeBarcode(val) : val });
+                }}
+                onBlur={(e) => {
+                  setFormData({ ...formData, barcode: normalizeBarcode(e.target.value) });
+                }}
                 style={styles.input}
               />
             </div>

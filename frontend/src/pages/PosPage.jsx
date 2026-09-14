@@ -24,6 +24,7 @@ import {
 import Modal from '../components/common/Modal';
 import { playSuccessBeep, playErrorBeep } from '../utils/audio';
 import { selectCurrentUser } from '../store/authSlice';
+import { decodeScannerKey, normalizeBarcode, isAzertyBarcode } from '../utils/barcode';
 
 export default function PosPage() {
   const user = useSelector(selectCurrentUser);
@@ -60,6 +61,7 @@ export default function PosPage() {
     return (
       p.name.toLowerCase().includes(query) ||
       p.barcode.toLowerCase().includes(query) ||
+      (normalizeBarcode(query) && p.barcode.toLowerCase().includes(normalizeBarcode(query).toLowerCase())) ||
       (p.category?.name && p.category.name.toLowerCase().includes(query))
     );
   });
@@ -68,6 +70,7 @@ export default function PosPage() {
     // Global USB barcode scanner keystroke listener
     let buffer = '';
     let lastKeyTime = Date.now();
+    let scannerBurstCount = 0;
 
     const handleGlobalKeyDown = async (e) => {
       // Don't intercept when user is typing inside modal inputs
@@ -75,36 +78,53 @@ export default function PosPage() {
 
       const currentTime = Date.now();
       const interval = currentTime - lastKeyTime;
-      const char = e.key;
+      lastKeyTime = currentTime;
 
       // Reset buffer if delay between keystrokes exceeds 120ms (manual typing vs scanner burst)
       if (interval > 120) {
         buffer = '';
+        scannerBurstCount = 0;
       }
-      lastKeyTime = currentTime;
 
-      if (char === 'Enter') {
-        const code = buffer.trim();
+      if (e.key === 'Enter') {
+        const rawCode = buffer.trim();
+        const code = normalizeBarcode(rawCode);
         if (code.length >= 2) {
           e.preventDefault();
+          e.stopPropagation();
           buffer = '';
+          scannerBurstCount = 0;
           setScanError('');
+          // Always clear search field on scan so scanner garbage never remains
+          setCatalogSearch('');
+
           try {
             const product = await fetchProductByBarcode(code).unwrap();
             addToCart(product);
-            setCatalogSearch('');
           } catch (err) {
             playErrorBeep();
             setScanError(`Code-barres "${code}" introuvable.`);
           }
         }
-      } else if (char.length === 1) {
-        buffer += char;
+      } else {
+        const decodedChar = decodeScannerKey(e);
+        if (decodedChar) {
+          buffer += decodedChar;
+          scannerBurstCount++;
+
+          // If rapid scanner burst detected (interval < 60ms) and focus is in search input,
+          // clear scanner symbols from the input so it stays clean
+          if (interval < 60 && scannerBurstCount >= 2) {
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+              setCatalogSearch('');
+            }
+          }
+        }
       }
     };
 
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
   }, [fetchProductByBarcode, cart, transactionType, isConfirmSaleModalOpen, isReceiptOpen]);
 
   const handleManualSearchSubmit = async (e) => {
@@ -112,11 +132,15 @@ export default function PosPage() {
     if (!catalogSearch.trim()) return;
 
     setScanError('');
-    const query = catalogSearch.trim();
+    const rawQuery = catalogSearch.trim();
+    const normalizedQuery = normalizeBarcode(rawQuery);
 
-    // Check loaded products first
+    // 1. Check loaded products first (check barcode with raw & normalized, or product name)
     const exactMatch = allProducts.find(
-      (p) => p.barcode === query || p.name.toLowerCase() === query.toLowerCase()
+      (p) =>
+        p.barcode === rawQuery ||
+        p.barcode === normalizedQuery ||
+        p.name.toLowerCase() === rawQuery.toLowerCase()
     );
 
     if (exactMatch) {
@@ -125,19 +149,25 @@ export default function PosPage() {
       return;
     }
 
+    // 2. If filtered catalog has exactly 1 item
     if (filteredCatalog.length === 1) {
       addToCart(filteredCatalog[0]);
       setCatalogSearch('');
       return;
     }
 
+    // 3. Fetch by barcode from backend (try normalized barcode if it looks like AZERTY barcode, else raw query)
+    const barcodeToFetch = isAzertyBarcode(rawQuery)
+      ? normalizedQuery
+      : (/^\d+$/.test(normalizedQuery) && normalizedQuery.length >= 4 ? normalizedQuery : rawQuery);
+
     try {
-      const product = await fetchProductByBarcode(query).unwrap();
+      const product = await fetchProductByBarcode(barcodeToFetch).unwrap();
       addToCart(product);
       setCatalogSearch('');
     } catch (err) {
       playErrorBeep();
-      setScanError(`Aucun produit trouvé pour "${query}".`);
+      setScanError(`Aucun produit trouvé pour "${rawQuery}".`);
     }
   };
 
@@ -296,7 +326,10 @@ export default function PosPage() {
                 type="text"
                 placeholder="Rechercher un produit (nom, code-barres, catégorie)..."
                 value={catalogSearch}
-                onChange={(e) => setCatalogSearch(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setCatalogSearch(isAzertyBarcode(val) ? normalizeBarcode(val) : val);
+                }}
                 style={styles.manualSearchInput}
                 autoFocus
               />
