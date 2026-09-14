@@ -22,6 +22,7 @@ import {
   useCreateTransactionMutation 
 } from '../api/apiSlice';
 import Modal from '../components/common/Modal';
+import Pagination from '../components/common/Pagination';
 import { playSuccessBeep, playErrorBeep } from '../utils/audio';
 import { selectCurrentUser } from '../store/authSlice';
 import { decodeScannerKey, normalizeBarcode, isAzertyBarcode } from '../utils/barcode';
@@ -30,7 +31,9 @@ export default function PosPage() {
   const user = useSelector(selectCurrentUser);
   const isAdmin = user?.role === 'admin';
 
+  const [posPage, setPosPage] = useState(1);
   const [catalogSearch, setCatalogSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [cart, setCart] = useState([]);
   const [transactionType, setTransactionType] = useState('sale'); // 'sale' | 'purchase'
   const [scanError, setScanError] = useState('');
@@ -40,13 +43,37 @@ export default function PosPage() {
   const [batchModalProduct, setBatchModalProduct] = useState(null);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
-  // RTK Query hooks
-  const { data: productsData } = useGetProductsQuery({ page: 1 });
+  // Debounce search input to query DB directly from backend
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(catalogSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [catalogSearch]);
+
+  // Reset pagination to page 1 whenever search query changes
+  useEffect(() => {
+    setPosPage(1);
+  }, [debouncedSearch]);
+
+  // RTK Query hooks - bring 50 products per page directly from backend with search filter
+  const { data: productsData, isLoading: loadingProducts } = useGetProductsQuery({ 
+    page: posPage,
+    per_page: 50,
+    search: debouncedSearch 
+  });
   const [fetchProductByBarcode, { isLoading: searchingBarcode }] = useLazyGetScannerProductQuery();
   const [processScannerSale, { isLoading: processingSale }] = useProcessScannerSaleMutation();
   const [createTransaction, { isLoading: processingTx }] = useCreateTransactionMutation();
 
   const allProducts = productsData?.data || [];
+  const pagination = productsData
+    ? {
+        currentPage: productsData.current_page || 1,
+        lastPage: productsData.last_page || 1,
+        total: productsData.total ?? allProducts.length,
+      }
+    : { currentPage: 1, lastPage: 1, total: 0 };
 
   // Calculate live front-end stock for any product based on current cart
   const getLiveStock = (product) => {
@@ -58,13 +85,14 @@ export default function PosPage() {
   };
 
   const filteredCatalog = allProducts.filter((p) => {
-    if (!catalogSearch.trim()) return true;
+    if (!catalogSearch.trim() || catalogSearch.trim() === debouncedSearch.trim()) return true;
     const query = catalogSearch.toLowerCase().trim();
     return (
       (p.name && p.name.toLowerCase().includes(query)) ||
       (p.barcode && p.barcode.toLowerCase().includes(query)) ||
       (p.barcode && normalizeBarcode(query) && p.barcode.toLowerCase().includes(normalizeBarcode(query).toLowerCase())) ||
-      (p.category?.name && p.category.name.toLowerCase().includes(query))
+      (p.category?.name && p.category.name.toLowerCase().includes(query)) ||
+      (p.brand?.name && p.brand.name.toLowerCase().includes(query))
     );
   });
 
@@ -136,6 +164,10 @@ export default function PosPage() {
     setScanError('');
     const rawQuery = catalogSearch.trim();
     const normalizedQuery = normalizeBarcode(rawQuery);
+
+    if (debouncedSearch !== rawQuery) {
+      setDebouncedSearch(rawQuery);
+    }
 
     // 1. Check loaded products first (check barcode with raw & normalized, or product name)
     const exactMatch = allProducts.find(
@@ -355,7 +387,7 @@ export default function PosPage() {
           <div style={styles.cardHeader}>
             <Package size={18} style={{ color: '#2563eb', marginRight: '8px' }} />
             <span style={styles.cardTitle}>
-              Catalogue des Produits ({filteredCatalog.length} Articles)
+              Catalogue des Produits ({pagination.total} Articles)
             </span>
           </div>
 
@@ -385,7 +417,11 @@ export default function PosPage() {
 
             {/* Live Filtered Catalog Grid with Images & Live Stock */}
             <div style={styles.catalogGrid}>
-              {filteredCatalog.length === 0 ? (
+              {loadingProducts ? (
+                <div style={{ gridColumn: '1 / -1', padding: '30px', textAlign: 'center', color: '#6b7280' }}>
+                  Chargement des produits...
+                </div>
+              ) : filteredCatalog.length === 0 ? (
                 <div style={{ gridColumn: '1 / -1', padding: '30px', textAlign: 'center', color: '#6b7280' }}>
                   Aucun produit correspondant à "{catalogSearch}".
                 </div>
@@ -462,6 +498,14 @@ export default function PosPage() {
                 })
               )}
             </div>
+
+            {/* Catalog Pagination */}
+            <Pagination
+              currentPage={pagination.currentPage}
+              lastPage={pagination.lastPage}
+              total={pagination.total}
+              onPageChange={(p) => setPosPage(p)}
+            />
           </div>
         </div>
       </div>
@@ -982,7 +1026,7 @@ const styles = {
     gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
     gap: '12px',
     overflowY: 'auto',
-    maxHeight: 'calc(100vh - 240px)',
+    maxHeight: 'calc(100vh - 300px)',
   },
   catalogItem: {
     backgroundColor: '#ffffff',

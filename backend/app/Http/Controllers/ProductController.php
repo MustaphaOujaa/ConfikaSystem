@@ -38,7 +38,13 @@ class ProductController extends Controller
 
             $query->where(function ($q) use ($search, $normalizedSearch) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('barcode', 'like', "%{$search}%");
+                  ->orWhere('barcode', 'like', "%{$search}%")
+                  ->orWhereHas('category', function ($cq) use ($search) {
+                      $cq->where('name', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('brand', function ($bq) use ($search) {
+                      $bq->where('name', 'like', "%{$search}%");
+                  });
                 if ($normalizedSearch !== $search) {
                     $q->orWhere('barcode', 'like', "%{$normalizedSearch}%");
                 }
@@ -76,9 +82,9 @@ class ProductController extends Controller
                 break;
         }
 
-        $perPage = (int) $request->input('per_page', 15);
+        $perPage = (int) $request->input('per_page', 50);
         if ($perPage <= 0 || $perPage > 100) {
-            $perPage = 15;
+            $perPage = 50;
         }
 
         return response()->json($query->paginate($perPage));
