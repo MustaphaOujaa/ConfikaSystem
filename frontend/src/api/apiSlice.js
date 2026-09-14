@@ -334,6 +334,7 @@ export const {
   useGetDailyReportQuery,
   useGetMonthlyReportQuery,
   useGetProductsQuery,
+  useLazyGetProductsQuery,
   useGetProductByIdQuery,
   useGetLowStockAlertsQuery,
   useCreateProductMutation,

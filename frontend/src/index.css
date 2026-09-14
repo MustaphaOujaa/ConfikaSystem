@@ -229,3 +229,50 @@ input, select, textarea {
   }
 }
 
+/* POS & Product Card Hover and Micro-Interactions */
+.pos-product-card {
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  will-change: transform;
+}
+
+.pos-product-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: #dc2626 !important;
+  box-shadow: 0 6px 14px rgba(220, 38, 38, 0.12) !important;
+}
+
+.pos-product-card:hover:not(:disabled) .pos-add-badge {
+  background-color: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+.pos-product-card:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.product-management-card {
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.product-management-card:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08) !important;
+}
+
+.spinner-spin {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #dc2626;
+  border-radius: 50%;
+  animation: spinnerRotate 0.6s linear infinite;
+}
+
+@keyframes spinnerRotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+

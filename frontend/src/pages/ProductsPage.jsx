@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, 
   Search, 
@@ -10,11 +10,14 @@ import {
   Layers,
   Check,
   X,
-  Barcode as BarcodeIcon
+  Barcode as BarcodeIcon,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { 
   useGetProductsQuery, 
+  useLazyGetProductsQuery,
   useGetCategoriesQuery, 
   useGetBrandsQuery,
   useCreateProductMutation, 
@@ -25,7 +28,6 @@ import {
   useDeleteProductStockMutation 
 } from '../api/apiSlice';
 import Modal from '../components/common/Modal';
-import Pagination from '../components/common/Pagination';
 import BarcodeLabelModal from '../components/common/BarcodeLabelModal';
 import { playSuccessBeep } from '../utils/audio';
 import { selectCurrentUser } from '../store/authSlice';
@@ -93,14 +95,22 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState(null);
   const [formError, setFormError] = useState('');
 
-  // RTK Query hooks - backend handles filtering, search, sorting and pagination
-  const { data: productsData, isLoading: loadingProducts, error: fetchError } = useGetProductsQuery({ 
-    page,
-    category_id: selectedCategory,
-    brand_id: selectedBrand,
-    search: debouncedSearch,
-    sort_by: sortBy,
+  const [productsList, setProductsList] = useState([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('confika_products_view_mode') || 'table';
+    } catch {
+      return 'table';
+    }
   });
+
+  const productsObserverTarget = useRef(null);
+
+  // RTK Query hooks - backend handles filtering, search, sorting and pagination
+  const [fetchProductsTrigger, { isLoading: loadingInitial, error: fetchError }] = useLazyGetProductsQuery();
   const { data: categoriesData } = useGetCategoriesQuery({ all: true });
   const { data: brandsData } = useGetBrandsQuery();
   
@@ -111,14 +121,119 @@ export default function ProductsPage() {
   const [updateProductStock, { isLoading: updatingStock }] = useUpdateProductStockMutation();
   const [deleteProductStock, { isLoading: deletingStock }] = useDeleteProductStockMutation();
 
+  // Load page 1 whenever filters or sorting changes
+  useEffect(() => {
+    let isCancelled = false;
+    setPage(1);
+    setHasMore(true);
+
+    fetchProductsTrigger({
+      page: 1,
+      per_page: 36,
+      category_id: selectedCategory,
+      brand_id: selectedBrand,
+      search: debouncedSearch,
+      sort_by: sortBy,
+    }, false)
+      .unwrap()
+      .then((res) => {
+        if (isCancelled) return;
+        const items = res?.data || [];
+        setProductsList(items);
+        setTotalCount(res?.total ?? items.length);
+        setHasMore(res?.current_page < res?.last_page);
+      })
+      .catch((err) => {
+        console.error('Failed to load products:', err);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [debouncedSearch, selectedCategory, selectedBrand, sortBy, fetchProductsTrigger]);
+
+  const loadMore = async () => {
+    if (!hasMore || loadingMore || loadingInitial) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    try {
+      const res = await fetchProductsTrigger({
+        page: nextPage,
+        per_page: 36,
+        category_id: selectedCategory,
+        brand_id: selectedBrand,
+        search: debouncedSearch,
+        sort_by: sortBy,
+      }, false).unwrap();
+
+      const newItems = res?.data || [];
+      setProductsList((prev) => {
+        const map = new Map(prev.map((p) => [p.id, p]));
+        newItems.forEach((p) => map.set(p.id, p));
+        return Array.from(map.values());
+      });
+      setPage(nextPage);
+      setTotalCount(res?.total ?? 0);
+      setHasMore(res?.current_page < res?.last_page);
+    } catch (err) {
+      console.error('Failed to load more products:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!productsObserverTarget.current || !hasMore || loadingMore || loadingInitial) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !loadingMore && !loadingInitial) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1, rootMargin: '200px' }
+    );
+
+    const currentEl = productsObserverTarget.current;
+    observer.observe(currentEl);
+    return () => {
+      if (currentEl) observer.unobserve(currentEl);
+      observer.disconnect();
+    };
+  }, [hasMore, loadingMore, loadingInitial, page, debouncedSearch, selectedCategory, selectedBrand, sortBy]);
+
+  const refreshProducts = async () => {
+    try {
+      const res = await fetchProductsTrigger({
+        page: 1,
+        per_page: Math.max(36, productsList.length),
+        category_id: selectedCategory,
+        brand_id: selectedBrand,
+        search: debouncedSearch,
+        sort_by: sortBy,
+      }, false).unwrap();
+      const items = res?.data || [];
+      setProductsList(items);
+      setTotalCount(res?.total ?? items.length);
+      setHasMore(res?.current_page < res?.last_page);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleToggleViewMode = (mode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('confika_products_view_mode', mode);
+    } catch (e) {
+      // ignore
+    }
+  };
+
   const categories = categoriesData?.data || categoriesData || [];
   const brands = brandsData?.data || brandsData || [];
-  const products = productsData?.data || [];
-  const pagination = productsData ? {
-    currentPage: productsData.current_page || 1,
-    lastPage: productsData.last_page || 1,
-    total: productsData.total || products.length,
-  } : { currentPage: 1, lastPage: 1, total: 0 };
+  const products = productsList;
+  const loadingProducts = loadingInitial;
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -264,6 +379,7 @@ export default function ProductsPage() {
       await restockProduct(payload).unwrap();
       setIsRestockModalOpen(false);
       setRestockProductTarget(null);
+      refreshProducts();
     } catch (err) {
       setRestockError(err?.data?.message || 'Échec du réapprovisionnement.');
     }
@@ -292,6 +408,7 @@ export default function ProductsPage() {
       setRestockProductTarget(updatedProduct);
       setEditingBatchId(null);
       setEditingBatchName('');
+      refreshProducts();
     } catch (err) {
       setRestockError(err?.data?.message || 'Échec de la modification du nom du lot.');
     }
@@ -312,6 +429,7 @@ export default function ProductsPage() {
       if (selectedStockId === stockId) {
         setSelectedStockId(remaining[0]?.id || '');
       }
+      refreshProducts();
     } catch (err) {
       setRestockError(err?.data?.message || 'Échec de la suppression du lot.');
     }
@@ -348,6 +466,7 @@ export default function ProductsPage() {
     try {
       await createProduct(payload).unwrap();
       setIsAddModalOpen(false);
+      refreshProducts();
     } catch (err) {
       setFormError(err?.data?.message || 'Échec de la création du produit.');
     }
@@ -375,6 +494,7 @@ export default function ProductsPage() {
     try {
       await updateProduct({ id: editingProduct.id, formData: payload }).unwrap();
       setIsEditModalOpen(false);
+      refreshProducts();
     } catch (err) {
       setFormError(err?.data?.message || 'Échec de la mise à jour du produit.');
     }
@@ -384,6 +504,8 @@ export default function ProductsPage() {
     if (window.confirm('Voulez-vous vraiment supprimer ce produit ?')) {
       try {
         await deleteProduct(id).unwrap();
+        setProductsList((prev) => prev.filter((p) => p.id !== id));
+        setTotalCount((prev) => Math.max(0, prev - 1));
       } catch (err) {
         console.error(err);
         alert('Échec de la suppression du produit.');
@@ -449,23 +571,176 @@ export default function ProductsPage() {
           </select>
         </div>
 
-        {isAdmin && (
-          <button onClick={handleOpenAdd} style={styles.addBtn}>
-            <Plus size={16} style={{ marginRight: '6px' }} />
-            <span>Nouveau Produit</span>
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* View Mode Switcher (Table vs Cards Grid) */}
+          <div style={styles.viewToggleGroup}>
+            <button
+              type="button"
+              onClick={() => handleToggleViewMode('table')}
+              style={{
+                ...styles.viewToggleBtn,
+                backgroundColor: viewMode === 'table' ? '#ffffff' : 'transparent',
+                color: viewMode === 'table' ? '#111827' : '#6b7280',
+                boxShadow: viewMode === 'table' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              }}
+              title="Affichage Tableau"
+            >
+              <List size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleToggleViewMode('grid')}
+              style={{
+                ...styles.viewToggleBtn,
+                backgroundColor: viewMode === 'grid' ? '#ffffff' : 'transparent',
+                color: viewMode === 'grid' ? '#111827' : '#6b7280',
+                boxShadow: viewMode === 'grid' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              }}
+              title="Affichage Grille (Cartes)"
+            >
+              <LayoutGrid size={16} />
+            </button>
+          </div>
+
+          {isAdmin && (
+            <button onClick={handleOpenAdd} style={styles.addBtn}>
+              <Plus size={16} style={{ marginRight: '6px' }} />
+              <span>Nouveau Produit</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Products Table */}
-      <div className="responsive-table-container" style={styles.tableCard}>
-        {loadingProducts ? (
-          <div style={styles.loading}>Chargement de l'inventaire...</div>
-        ) : fetchError ? (
+      {/* Products Display (Table or Grid Cards) */}
+      {loadingProducts && products.length === 0 ? (
+        <div style={styles.tableCard}>
+          <div style={styles.loading}>
+            <span className="spinner-spin" style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+            Chargement de l'inventaire...
+          </div>
+        </div>
+      ) : fetchError ? (
+        <div style={styles.tableCard}>
           <div style={styles.errorState}>Erreur lors du chargement des produits. Vérifiez le serveur API.</div>
-        ) : products.length === 0 ? (
+        </div>
+      ) : products.length === 0 ? (
+        <div style={styles.tableCard}>
           <div style={styles.emptyState}>Aucun produit trouvé.</div>
-        ) : (
+        </div>
+      ) : viewMode === 'grid' ? (
+        /* Grid Cards View */
+        <div style={styles.productsGrid}>
+          {products.map((p) => {
+            const primaryImage = p.images && p.images.length > 0 ? p.images[0].path : null;
+            const isLowStock = p.quantity <= 5;
+            const gain = calculateGain(p.price, p.cost_price);
+
+            return (
+              <div key={p.id} className="product-management-card" style={styles.productCard}>
+                {/* Product Card Image & Badges */}
+                <div style={styles.productCardImgWrapper}>
+                  {primaryImage ? (
+                    <img
+                      src={primaryImage}
+                      alt={p.name}
+                      style={styles.productCardImg}
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = '/icon.jpeg';
+                      }}
+                    />
+                  ) : (
+                    <div style={styles.productCardNoImg}>
+                      <Package size={36} style={{ color: '#94a3b8' }} />
+                    </div>
+                  )}
+
+                  {/* Stock Badge */}
+                  <div
+                    style={{
+                      ...styles.productCardStockBadge,
+                      backgroundColor: p.quantity <= 0 ? '#ef4444' : isLowStock ? '#f59e0b' : '#10b981',
+                    }}
+                  >
+                    {p.quantity <= 0 ? 'Rupture' : `${p.quantity} Unités`}
+                  </div>
+
+                  {/* Barcode Tag */}
+                  {p.barcode && (
+                    <div style={styles.productCardBarcodeBadge} title={`Code-barres: ${p.barcode}`}>
+                      {p.barcode}
+                    </div>
+                  )}
+                </div>
+
+                {/* Product Card Content */}
+                <div style={styles.productCardBody}>
+                  <div>
+                    <div style={styles.productCardTitle} title={p.name}>
+                      {p.name}
+                    </div>
+                    <div style={styles.productCardCategoryRow}>
+                      <span>{p.category?.name || 'Général'}</span>
+                      {p.brand?.name && <span style={{ color: '#94a3b8' }}>• {p.brand.name}</span>}
+                    </div>
+                  </div>
+
+                  {/* Prices & Gain */}
+                  <div style={styles.productCardPricesRow}>
+                    <div>
+                      <span style={styles.productCardPriceLabel}>Prix Vente</span>
+                      <div style={styles.productCardPrice}>
+                        {Number(p.price).toFixed(2)} <span style={{ fontSize: '11px', color: '#64748b' }}>MAD</span>
+                      </div>
+                    </div>
+
+                    {isAdmin && (
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={styles.productCardPriceLabel}>Bénéfice</span>
+                        <div
+                          style={{
+                            ...styles.gainBadge,
+                            backgroundColor: gain >= 0 ? '#ecfdf5' : '#fef2f2',
+                            color: gain >= 0 ? '#059669' : '#dc2626',
+                            fontSize: '11.5px',
+                          }}
+                        >
+                          <TrendingUp size={11} style={{ marginRight: '3px' }} />
+                          +{gain.toFixed(2)} MAD
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions Bar */}
+                  <div style={styles.productCardActions}>
+                    {p.barcode && (
+                      <button onClick={() => handleOpenBarcodeLabel(p)} style={styles.iconBtn} title="Imprimer l'étiquette code-barres">
+                        <BarcodeIcon size={15} color="#4f46e5" />
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button onClick={() => handleOpenRestock(p)} style={{ ...styles.iconBtn, color: '#059669', borderColor: '#a7f3d0', backgroundColor: '#f0fdf4' }} title="Réapprovisionner / Lots">
+                        <Layers size={15} />
+                      </button>
+                    )}
+                    <button onClick={() => handleOpenEdit(p)} style={styles.iconBtn} title="Modifier le produit">
+                      <Edit size={15} />
+                    </button>
+                    {isAdmin && (
+                      <button onClick={() => handleDelete(p.id)} style={styles.deleteIconBtn} title="Supprimer">
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* Table View */
+        <div className="responsive-table-container" style={styles.tableCard}>
           <table style={styles.table}>
             <thead>
               <tr>
@@ -550,7 +825,7 @@ export default function ProductsPage() {
                             <Layers size={16} />
                           </button>
                         )}
-                        {/* Edit: visible to all (caissier sees info-only form, admin sees full form) */}
+                        {/* Edit */}
                         <button onClick={() => handleOpenEdit(p)} style={styles.iconBtn} title="Modifier le produit">
                           <Edit size={16} />
                         </button>
@@ -567,14 +842,31 @@ export default function ProductsPage() {
               })}
             </tbody>
           </table>
-        )}
+        </div>
+      )}
 
-        <Pagination
-          currentPage={pagination.currentPage}
-          lastPage={pagination.lastPage}
-          total={pagination.total}
-          onPageChange={(p) => setPage(p)}
-        />
+      {/* Infinite Scroll Sentinel & Loader */}
+      <div
+        ref={productsObserverTarget}
+        style={{
+          padding: '20px 0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '100%',
+        }}
+      >
+        {loadingMore && (
+          <div style={styles.infiniteLoading}>
+            <span className="spinner-spin" />
+            Chargement de plus de produits...
+          </div>
+        )}
+        {!hasMore && products.length > 0 && (
+          <div style={styles.infiniteEnded}>
+            Tous les produits sont affichés ({products.length} sur {totalCount} au total)
+          </div>
+        )}
       </div>
 
       {/* Add Product Modal */}
@@ -1251,6 +1543,174 @@ const styles = {
     fontSize: '14px',
     fontWeight: '600',
     cursor: 'pointer',
+  },
+  viewToggleGroup: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    padding: '3px',
+    borderRadius: '6px',
+    border: '1px solid #e5e7eb',
+    gap: '2px',
+  },
+  viewToggleBtn: {
+    padding: '6px 10px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  productsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+    gap: '16px',
+    width: '100%',
+  },
+  productCard: {
+    backgroundColor: '#ffffff',
+    border: '1px solid #e2e8f0',
+    borderRadius: '10px',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    position: 'relative',
+    height: '310px',
+    boxSizing: 'border-box',
+  },
+  productCardImgWrapper: {
+    position: 'relative',
+    width: '100%',
+    height: '140px',
+    backgroundColor: '#f8fafc',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  productCardImg: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    display: 'block',
+  },
+  productCardNoImg: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f1f5f9',
+  },
+  productCardStockBadge: {
+    position: 'absolute',
+    top: '8px',
+    right: '8px',
+    padding: '3px 8px',
+    borderRadius: '10px',
+    fontSize: '11px',
+    fontWeight: '700',
+    color: '#ffffff',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+    zIndex: 2,
+    lineHeight: '1.2',
+  },
+  productCardBarcodeBadge: {
+    position: 'absolute',
+    top: '8px',
+    left: '8px',
+    padding: '2px 7px',
+    borderRadius: '6px',
+    fontSize: '10.5px',
+    fontWeight: '600',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    color: '#334155',
+    backdropFilter: 'blur(4px)',
+    border: '1px solid rgba(226,232,240,0.8)',
+    zIndex: 2,
+    fontFamily: 'monospace',
+    maxWidth: '130px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  productCardBody: {
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    justifyContent: 'space-between',
+    boxSizing: 'border-box',
+  },
+  productCardTitle: {
+    fontSize: '13.5px',
+    fontWeight: '600',
+    color: '#1e293b',
+    lineHeight: '1.35',
+    height: '36px',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+    wordBreak: 'break-word',
+  },
+  productCardCategoryRow: {
+    fontSize: '11.5px',
+    color: '#64748b',
+    marginTop: '2px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  productCardPricesRow: {
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    padding: '8px 0',
+    borderTop: '1px solid #f1f5f9',
+    borderBottom: '1px solid #f1f5f9',
+    marginTop: 'auto',
+  },
+  productCardPriceLabel: {
+    fontSize: '10.5px',
+    color: '#94a3b8',
+    display: 'block',
+    marginBottom: '1px',
+    fontWeight: '500',
+  },
+  productCardPrice: {
+    fontSize: '15px',
+    fontWeight: '700',
+    color: '#111827',
+  },
+  productCardActions: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: '6px',
+    paddingTop: '6px',
+  },
+  infiniteLoading: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    color: '#64748b',
+    fontSize: '13px',
+    fontWeight: '500',
+  },
+  infiniteEnded: {
+    textAlign: 'center',
+    color: '#94a3b8',
+    fontSize: '12.5px',
+    fontWeight: '500',
   },
   tableCard: {
     backgroundColor: '#ffffff',

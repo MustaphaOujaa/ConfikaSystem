@@ -17,12 +17,12 @@ import {
 import { useSelector } from 'react-redux';
 import { 
   useGetProductsQuery, 
+  useLazyGetProductsQuery,
   useLazyGetScannerProductQuery, 
   useProcessScannerSaleMutation,
   useCreateTransactionMutation 
 } from '../api/apiSlice';
 import Modal from '../components/common/Modal';
-import Pagination from '../components/common/Pagination';
 import { playSuccessBeep, playErrorBeep } from '../utils/audio';
 import { selectCurrentUser } from '../store/authSlice';
 import { decodeScannerKey, normalizeBarcode, isAzertyBarcode } from '../utils/barcode';
@@ -31,7 +31,12 @@ export default function PosPage() {
   const user = useSelector(selectCurrentUser);
   const isAdmin = user?.role === 'admin';
 
-  const [posPage, setPosPage] = useState(1);
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogProducts, setCatalogProducts] = useState([]);
+  const [hasMoreCatalog, setHasMoreCatalog] = useState(true);
+  const [loadingMoreCatalog, setLoadingMoreCatalog] = useState(false);
+  const [totalCatalogCount, setTotalCatalogCount] = useState(0);
+
   const [catalogSearch, setCatalogSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [cart, setCart] = useState([]);
@@ -43,6 +48,8 @@ export default function PosPage() {
   const [batchModalProduct, setBatchModalProduct] = useState(null);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
+  const catalogObserverTarget = useRef(null);
+
   // Debounce search input to query DB directly from backend
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -51,29 +58,103 @@ export default function PosPage() {
     return () => clearTimeout(timer);
   }, [catalogSearch]);
 
-  // Reset pagination to page 1 whenever search query changes
-  useEffect(() => {
-    setPosPage(1);
-  }, [debouncedSearch]);
-
-  // RTK Query hooks - bring 50 products per page directly from backend with search filter
-  const { data: productsData, isLoading: loadingProducts } = useGetProductsQuery({ 
-    page: posPage,
-    per_page: 50,
-    search: debouncedSearch 
-  });
+  const [fetchProductsTrigger, { isLoading: loadingInitialProducts }] = useLazyGetProductsQuery();
   const [fetchProductByBarcode, { isLoading: searchingBarcode }] = useLazyGetScannerProductQuery();
   const [processScannerSale, { isLoading: processingSale }] = useProcessScannerSaleMutation();
   const [createTransaction, { isLoading: processingTx }] = useCreateTransactionMutation();
 
-  const allProducts = productsData?.data || [];
-  const pagination = productsData
-    ? {
-        currentPage: productsData.current_page || 1,
-        lastPage: productsData.last_page || 1,
-        total: productsData.total ?? allProducts.length,
-      }
-    : { currentPage: 1, lastPage: 1, total: 0 };
+  // Load page 1 whenever debounced search query changes
+  useEffect(() => {
+    let isCancelled = false;
+    setCatalogPage(1);
+    setHasMoreCatalog(true);
+
+    fetchProductsTrigger({
+      page: 1,
+      per_page: 36,
+      search: debouncedSearch,
+    }, false)
+      .unwrap()
+      .then((res) => {
+        if (isCancelled) return;
+        const items = res?.data || [];
+        setCatalogProducts(items);
+        setTotalCatalogCount(res?.total ?? items.length);
+        setHasMoreCatalog(res?.current_page < res?.last_page);
+      })
+      .catch((err) => {
+        console.error('Failed to load products in POS:', err);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [debouncedSearch, fetchProductsTrigger]);
+
+  const loadMoreCatalog = async () => {
+    if (!hasMoreCatalog || loadingMoreCatalog || loadingInitialProducts) return;
+    setLoadingMoreCatalog(true);
+    const nextPage = catalogPage + 1;
+    try {
+      const res = await fetchProductsTrigger({
+        page: nextPage,
+        per_page: 36,
+        search: debouncedSearch,
+      }, false).unwrap();
+
+      const newItems = res?.data || [];
+      setCatalogProducts((prev) => {
+        const map = new Map(prev.map((p) => [p.id, p]));
+        newItems.forEach((p) => map.set(p.id, p));
+        return Array.from(map.values());
+      });
+      setCatalogPage(nextPage);
+      setTotalCatalogCount(res?.total ?? 0);
+      setHasMoreCatalog(res?.current_page < res?.last_page);
+    } catch (err) {
+      console.error('Failed to load more products in POS:', err);
+    } finally {
+      setLoadingMoreCatalog(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!catalogObserverTarget.current || !hasMoreCatalog || loadingMoreCatalog || loadingInitialProducts) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMoreCatalog && !loadingMoreCatalog && !loadingInitialProducts) {
+          loadMoreCatalog();
+        }
+      },
+      { threshold: 0.1, rootMargin: '200px' }
+    );
+
+    const currentEl = catalogObserverTarget.current;
+    observer.observe(currentEl);
+    return () => {
+      if (currentEl) observer.unobserve(currentEl);
+      observer.disconnect();
+    };
+  }, [hasMoreCatalog, loadingMoreCatalog, loadingInitialProducts, catalogPage, debouncedSearch]);
+
+  const refreshCatalog = async () => {
+    try {
+      const res = await fetchProductsTrigger({
+        page: 1,
+        per_page: Math.max(36, catalogProducts.length),
+        search: debouncedSearch,
+      }, false).unwrap();
+      const items = res?.data || [];
+      setCatalogProducts(items);
+      setTotalCatalogCount(res?.total ?? items.length);
+      setHasMoreCatalog(res?.current_page < res?.last_page);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const allProducts = catalogProducts;
 
   // Calculate live front-end stock for any product based on current cart
   const getLiveStock = (product) => {
@@ -368,6 +449,7 @@ export default function PosPage() {
       setLastCompletedTransaction(result.transaction || result);
       setIsReceiptOpen(true);
       clearCart();
+      refreshCatalog();
     } catch (err) {
       playErrorBeep();
       setScanError(err?.data?.message || err?.message || 'Échec de la validation. Vérifiez le stock disponible.');
@@ -387,7 +469,7 @@ export default function PosPage() {
           <div style={styles.cardHeader}>
             <Package size={18} style={{ color: '#2563eb', marginRight: '8px' }} />
             <span style={styles.cardTitle}>
-              Catalogue des Produits ({pagination.total} Articles)
+              Catalogue des Produits ({totalCatalogCount} Articles)
             </span>
           </div>
 
@@ -415,97 +497,138 @@ export default function PosPage() {
 
             {scanError && <div style={styles.errorBanner}>{scanError}</div>}
 
-            {/* Live Filtered Catalog Grid with Images & Live Stock */}
+            {/* Live Filtered Catalog Grid with Images, Stock Badges & Infinite Scroll */}
             <div style={styles.catalogGrid}>
-              {loadingProducts ? (
-                <div style={{ gridColumn: '1 / -1', padding: '30px', textAlign: 'center', color: '#6b7280' }}>
+              {loadingInitialProducts && catalogProducts.length === 0 ? (
+                <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: '#6b7280' }}>
+                  <span className="spinner-spin" style={{ marginRight: '8px', verticalAlign: 'middle' }} />
                   Chargement des produits...
                 </div>
               ) : filteredCatalog.length === 0 ? (
-                <div style={{ gridColumn: '1 / -1', padding: '30px', textAlign: 'center', color: '#6b7280' }}>
+                <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: '#6b7280' }}>
                   Aucun produit correspondant à "{catalogSearch}".
                 </div>
               ) : (
-                filteredCatalog.map((p) => {
-                  const liveStock = getLiveStock(p);
-                  const isOutOfStock = transactionType === 'sale' && liveStock <= 0;
-                  const isLowStock = transactionType === 'sale' && liveStock > 0 && liveStock <= 5;
-                  const primaryImage = p.images && p.images.length > 0 ? p.images[0].path : null;
+                <>
+                  {filteredCatalog.map((p) => {
+                    const liveStock = getLiveStock(p);
+                    const isOutOfStock = transactionType === 'sale' && liveStock <= 0;
+                    const isLowStock = transactionType === 'sale' && liveStock > 0 && liveStock <= 5;
+                    const primaryImage = p.images && p.images.length > 0 ? p.images[0].path : null;
 
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => addToCart(p)}
-                      disabled={isOutOfStock}
-                      style={{
-                        ...styles.catalogItem,
-                        opacity: isOutOfStock ? 0.6 : 1,
-                        cursor: isOutOfStock ? 'not-allowed' : 'pointer',
-                        borderColor: isOutOfStock ? '#fca5a5' : '#e5e7eb',
-                      }}
-                      title={isOutOfStock ? "Stock épuisé" : `Cliquer pour ajouter : ${p.name}`}
-                    >
-                      {/* Product Image Thumbnail */}
-                      <div style={styles.catalogImgWrapper}>
-                        {primaryImage ? (
-                          <img
-                            src={primaryImage}
-                            alt={p.name}
-                            style={styles.catalogImg}
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src = '/icon.jpeg';
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => !isOutOfStock && addToCart(p)}
+                        disabled={isOutOfStock}
+                        className="pos-product-card"
+                        style={{
+                          ...styles.catalogItem,
+                          opacity: isOutOfStock ? 0.55 : 1,
+                          cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+                          borderColor: isOutOfStock ? '#fecaca' : '#e2e8f0',
+                          backgroundColor: isOutOfStock ? '#fafafa' : '#ffffff',
+                        }}
+                        title={isOutOfStock ? `${p.name} - Stock épuisé` : `Cliquer pour ajouter : ${p.name}`}
+                      >
+                        {/* Product Image Thumbnail */}
+                        <div style={styles.catalogImgWrapper}>
+                          {primaryImage ? (
+                            <img
+                              src={primaryImage}
+                              alt={p.name}
+                              style={{
+                                ...styles.catalogImg,
+                                filter: isOutOfStock ? 'grayscale(75%)' : 'none',
+                              }}
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = '/icon.jpeg';
+                              }}
+                            />
+                          ) : (
+                            <div style={styles.catalogNoImg}>
+                              <Package size={28} style={{ color: '#94a3b8' }} />
+                            </div>
+                          )}
+
+                          {/* Live Stock Overlay Badge */}
+                          <div
+                            style={{
+                              ...styles.stockOverlayBadge,
+                              backgroundColor: isOutOfStock
+                                ? '#ef4444'
+                                : isLowStock
+                                ? '#f59e0b'
+                                : '#10b981',
                             }}
-                          />
-                        ) : (
-                          <div style={styles.catalogNoImg}>
-                            <Package size={28} style={{ color: '#9ca3af' }} />
+                          >
+                            {isOutOfStock ? 'Épuisé' : `Stock: ${liveStock}`}
                           </div>
-                        )}
-                        {/* Live Stock Overlay Badge */}
-                        <div
-                          style={{
-                            ...styles.stockOverlayBadge,
-                            backgroundColor: isOutOfStock
-                              ? '#ef4444'
-                              : isLowStock
-                              ? '#f59e0b'
-                              : '#10b981',
-                          }}
-                        >
-                          {isOutOfStock
-                            ? 'Épuisé (0)'
-                            : `Stock: ${liveStock}`}
                         </div>
-                      </div>
 
-                      {/* Details */}
-                      <div style={styles.catalogContent}>
-                        <div style={styles.itemTitle} title={p.name}>
-                          {p.name}
+                        {/* Details */}
+                        <div style={styles.catalogContent}>
+                          <div>
+                            <div style={styles.itemTitle} title={p.name}>
+                              {p.name}
+                            </div>
+                            <div style={styles.itemCategory}>
+                              <span>{p.category?.name || 'Général'}</span>
+                              {p.brand?.name && (
+                                <span style={styles.itemBrandDot}>• {p.brand.name}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div style={styles.itemPriceRow}>
+                            <div style={styles.itemPrice}>
+                              {Number(p.price).toFixed(2)} <span style={styles.itemPriceCurrency}>MAD</span>
+                            </div>
+                            <div
+                              className="pos-add-badge"
+                              style={{
+                                ...styles.addBadge,
+                                backgroundColor: isOutOfStock ? '#f1f5f9' : '#fee2e2',
+                                color: isOutOfStock ? '#94a3b8' : '#dc2626',
+                              }}
+                            >
+                              <Plus size={13} strokeWidth={2.5} />
+                            </div>
+                          </div>
                         </div>
-                        <div style={styles.itemCategory}>
-                          {p.category?.name || 'Général'}
-                        </div>
-                        <div style={styles.itemPriceRow}>
-                          <span style={styles.itemPrice}>
-                            {Number(p.price).toFixed(2)} MAD
-                          </span>
-                        </div>
+                      </button>
+                    );
+                  })}
+
+                  {/* Infinite Scroll Sentinel */}
+                  <div
+                    ref={catalogObserverTarget}
+                    style={{
+                      gridColumn: '1 / -1',
+                      padding: '12px 0',
+                      minHeight: '24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {loadingMoreCatalog && (
+                      <div style={styles.infiniteLoading}>
+                        <span className="spinner-spin" />
+                        Chargement de plus de produits...
                       </div>
-                    </button>
-                  );
-                })
+                    )}
+                    {!hasMoreCatalog && catalogProducts.length > 0 && (
+                      <div style={styles.infiniteEnded}>
+                        Tous les produits sont affichés ({catalogProducts.length} articles)
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
-
-            {/* Catalog Pagination */}
-            <Pagination
-              currentPage={pagination.currentPage}
-              lastPage={pagination.lastPage}
-              total={pagination.total}
-              onPageChange={(p) => setPosPage(p)}
-            />
           </div>
         </div>
       </div>
@@ -1023,37 +1146,44 @@ const styles = {
   catalogGrid: {
     padding: '4px',
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(145px, 1fr))',
     gap: '12px',
     overflowY: 'auto',
-    maxHeight: 'calc(100vh - 300px)',
+    flex: '1',
+    minHeight: 0,
   },
   catalogItem: {
     backgroundColor: '#ffffff',
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '10px',
     overflow: 'hidden',
     textAlign: 'left',
     cursor: 'pointer',
-    transition: 'all 0.15s ease',
     display: 'flex',
     flexDirection: 'column',
     padding: 0,
+    width: '100%',
+    boxSizing: 'border-box',
+    outline: 'none',
+    position: 'relative',
+    height: '215px',
   },
   catalogImgWrapper: {
     position: 'relative',
     width: '100%',
     height: '110px',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#f8fafc',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    flexShrink: 0,
   },
   catalogImg: {
     width: '100%',
     height: '100%',
     objectFit: 'cover',
+    display: 'block',
   },
   catalogNoImg: {
     width: '100%',
@@ -1061,52 +1191,109 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#f1f5f9',
   },
   stockOverlayBadge: {
     position: 'absolute',
     top: '6px',
     right: '6px',
-    padding: '2px 7px',
-    borderRadius: '12px',
-    fontSize: '11px',
+    padding: '3px 7px',
+    borderRadius: '10px',
+    fontSize: '10px',
     fontWeight: '700',
     color: '#ffffff',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.18)',
+    zIndex: 2,
+    lineHeight: '1.2',
+    whiteSpace: 'nowrap',
+    maxWidth: 'calc(100% - 12px)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   catalogContent: {
-    padding: '10px',
+    padding: '8px 10px 10px',
     display: 'flex',
     flexDirection: 'column',
-    flex: 1,
     justifyContent: 'space-between',
+    height: '105px',
+    boxSizing: 'border-box',
+    width: '100%',
   },
   itemTitle: {
-    fontSize: '13px',
+    fontSize: '12.5px',
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: '2px',
+    color: '#1e293b',
+    lineHeight: '1.35',
+    height: '34px',
     display: '-webkit-box',
     WebkitLineClamp: 2,
     WebkitBoxOrient: 'vertical',
     overflow: 'hidden',
-    lineHeight: '1.3',
+    wordBreak: 'break-word',
+    textAlign: 'left',
+    margin: 0,
   },
   itemCategory: {
     fontSize: '11px',
-    color: '#6b7280',
-    marginBottom: '6px',
+    color: '#64748b',
+    marginTop: '2px',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '3px',
+    textAlign: 'left',
+  },
+  itemBrandDot: {
+    color: '#94a3b8',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   itemPriceRow: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 'auto',
+    paddingTop: '6px',
+    borderTop: '1px solid #f1f5f9',
+    width: '100%',
   },
   itemPrice: {
-    fontSize: '13px',
+    fontSize: '13.5px',
     fontWeight: '700',
     color: '#dc2626',
+    letterSpacing: '-0.2px',
+  },
+  itemPriceCurrency: {
+    fontSize: '10px',
+    fontWeight: '600',
+    color: '#ef4444',
+    marginLeft: '2px',
+  },
+  addBadge: {
+    width: '24px',
+    height: '24px',
+    borderRadius: '6px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.15s ease',
+  },
+  infiniteLoading: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    color: '#64748b',
+    fontSize: '13px',
+    fontWeight: '500',
+  },
+  infiniteEnded: {
+    textAlign: 'center',
+    color: '#94a3b8',
+    fontSize: '12px',
+    fontWeight: '500',
   },
   cartCard: {
     backgroundColor: '#ffffff',
