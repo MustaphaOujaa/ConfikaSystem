@@ -169,6 +169,44 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: [{ type: 'Product', id: 'LIST' }, 'LowStock', 'DailyReport'],
     }),
+    restockProduct: builder.mutation({
+      query: ({ id, ...restockData }) => ({
+        url: `/products/${id}/restock`,
+        method: 'POST',
+        body: restockData,
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Product', id },
+        { type: 'Product', id: 'LIST' },
+        'LowStock',
+        'DailyReport',
+      ],
+    }),
+    updateProductStock: builder.mutation({
+      query: ({ productId, stockId, ...data }) => ({
+        url: `/products/${productId}/stocks/${stockId}`,
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: (result, error, { productId }) => [
+        { type: 'Product', id: productId },
+        { type: 'Product', id: 'LIST' },
+        'LowStock',
+        'DailyReport',
+      ],
+    }),
+    deleteProductStock: builder.mutation({
+      query: ({ productId, stockId }) => ({
+        url: `/products/${productId}/stocks/${stockId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (result, error, { productId }) => [
+        { type: 'Product', id: productId },
+        { type: 'Product', id: 'LIST' },
+        'LowStock',
+        'DailyReport',
+      ],
+    }),
 
     // Categories
     getCategories: builder.query({
@@ -301,6 +339,9 @@ export const {
   useCreateProductMutation,
   useUpdateProductMutation,
   useDeleteProductMutation,
+  useRestockProductMutation,
+  useUpdateProductStockMutation,
+  useDeleteProductStockMutation,
   useGetCategoriesQuery,
   useCreateCategoryMutation,
   useUpdateCategoryMutation,

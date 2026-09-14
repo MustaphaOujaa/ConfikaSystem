@@ -37,6 +37,8 @@ export default function PosPage() {
   const [lastCompletedTransaction, setLastCompletedTransaction] = useState(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isConfirmSaleModalOpen, setIsConfirmSaleModalOpen] = useState(false);
+  const [batchModalProduct, setBatchModalProduct] = useState(null);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
   // RTK Query hooks
   const { data: productsData } = useGetProductsQuery({ page: 1 });
@@ -74,7 +76,7 @@ export default function PosPage() {
 
     const handleGlobalKeyDown = async (e) => {
       // Don't intercept when user is typing inside modal inputs
-      if (isConfirmSaleModalOpen || isReceiptOpen) return;
+      if (isConfirmSaleModalOpen || isReceiptOpen || isBatchModalOpen) return;
 
       const currentTime = Date.now();
       const interval = currentTime - lastKeyTime;
@@ -125,7 +127,7 @@ export default function PosPage() {
 
     window.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }, [fetchProductByBarcode, cart, transactionType, isConfirmSaleModalOpen, isReceiptOpen]);
+  }, [fetchProductByBarcode, cart, transactionType, isConfirmSaleModalOpen, isReceiptOpen, isBatchModalOpen]);
 
   const handleManualSearchSubmit = async (e) => {
     e.preventDefault();
@@ -170,15 +172,19 @@ export default function PosPage() {
     }
   };
 
-  const addToCart = (product) => {
+  const addToCartWithStock = (product, stock = null) => {
     setScanError('');
-    const existing = cart.find((item) => item.product.id === product.id);
+    const stockId = stock ? stock.id : null;
+    const existing = cart.find(
+      (item) => item.product.id === product.id && item.product_stock_id === stockId
+    );
     const currentQty = existing ? existing.quantity : 0;
 
-    // Check live stock limit for sales
-    if (transactionType === 'sale' && currentQty + 1 > (product.quantity || 0)) {
+    // Check stock limit
+    const maxAvailable = stock ? stock.quantity : (product.quantity || 0);
+    if (transactionType === 'sale' && currentQty + 1 > maxAvailable) {
       playErrorBeep();
-      setScanError(`Stock insuffisant pour "${product.name}". Disponible : ${product.quantity}.`);
+      setScanError(`Stock insuffisant pour ce lot de "${product.name}". Disponible : ${maxAvailable}.`);
       return;
     }
 
@@ -187,7 +193,7 @@ export default function PosPage() {
     setCart((prevCart) => {
       if (existing) {
         return prevCart.map((item) =>
-          item.product.id === product.id
+          item.product.id === product.id && item.product_stock_id === stockId
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
@@ -196,48 +202,82 @@ export default function PosPage() {
         ...prevCart,
         {
           product,
+          product_stock_id: stockId,
+          stock_batch: stock ? (stock.batch_number || `Lot #${stock.id}`) : null,
           quantity: 1,
-          unit_price: parseFloat(product.price) || 0,
+          unit_price: stock ? parseFloat(stock.price) : (parseFloat(product.price) || 0),
         },
       ];
     });
   };
 
-  const updateQuantity = (productId, delta) => {
+  const addToCart = (product) => {
+    setScanError('');
+
+    // In sale mode, check if product has multiple active stocks with different prices
+    if (transactionType === 'sale') {
+      const activeStocks = (product.active_stocks || product.stocks || []).filter(
+        (s) => (s.quantity || 0) > 0
+      );
+
+      // If more than 1 active batch exists, prompt the cashier to pick
+      if (activeStocks.length > 1) {
+        setBatchModalProduct({ ...product, activeStocks });
+        setIsBatchModalOpen(true);
+        return;
+      }
+
+      // If exactly 1 active batch exists, use it directly (no prompt!)
+      if (activeStocks.length === 1) {
+        addToCartWithStock(product, activeStocks[0]);
+        return;
+      }
+    }
+
+    // Default fallback
+    addToCartWithStock(product, null);
+  };
+
+  const updateQuantity = (productId, stockId, delta) => {
     setScanError('');
     setCart((prevCart) => {
-      const target = prevCart.find((item) => item.product.id === productId);
+      const target = prevCart.find(
+        (item) => item.product.id === productId && item.product_stock_id === stockId
+      );
       if (!target) return prevCart;
 
       const newQty = target.quantity + delta;
       if (newQty <= 0) {
-        return prevCart.filter((item) => item.product.id !== productId);
-      }
-
-      // Check stock limit for sales
-      if (delta > 0 && transactionType === 'sale' && newQty > (target.product.quantity || 0)) {
-        playErrorBeep();
-        setScanError(`Stock maximum disponible atteint pour "${target.product.name}" (${target.product.quantity} max).`);
-        return prevCart;
+        return prevCart.filter(
+          (item) => !(item.product.id === productId && item.product_stock_id === stockId)
+        );
       }
 
       return prevCart.map((item) =>
-        item.product.id === productId ? { ...item, quantity: newQty } : item
+        item.product.id === productId && item.product_stock_id === stockId
+          ? { ...item, quantity: newQty }
+          : item
       );
     });
   };
 
-  const updateUnitPrice = (productId, newPrice) => {
+  const updateUnitPrice = (productId, stockId, newPrice) => {
     const parsed = Math.max(0, parseFloat(newPrice) || 0);
     setCart((prevCart) =>
       prevCart.map((item) =>
-        item.product.id === productId ? { ...item, unit_price: parsed } : item
+        item.product.id === productId && item.product_stock_id === stockId
+          ? { ...item, unit_price: parsed }
+          : item
       )
     );
   };
 
-  const removeFromCart = (productId) => {
-    setCart((prevCart) => prevCart.filter((item) => item.product.id !== productId));
+  const removeFromCart = (productId, stockId) => {
+    setCart((prevCart) =>
+      prevCart.filter(
+        (item) => !(item.product.id === productId && item.product_stock_id === stockId)
+      )
+    );
   };
 
   const clearCart = () => {
@@ -273,6 +313,7 @@ export default function PosPage() {
         const payload = {
           items: cart.map((item) => ({
             barcode: item.product.barcode,
+            product_stock_id: item.product_stock_id || undefined,
             quantity: item.quantity,
             unit_price: item.unit_price,
           })),
@@ -284,6 +325,7 @@ export default function PosPage() {
           type: 'purchase',
           items: cart.map((item) => ({
             product_id: item.product.id,
+            product_stock_id: item.product_stock_id || undefined,
             quantity: item.quantity,
           })),
         };
@@ -459,7 +501,7 @@ export default function PosPage() {
                   const isPriceModified = transactionType === 'sale' && item.unit_price !== parseFloat(item.product.price);
 
                   return (
-                    <div key={item.product.id} style={styles.cartItemRow}>
+                    <div key={`${item.product.id}-${item.product_stock_id || 'default'}`} style={styles.cartItemRow}>
                       {/* Product Thumbnail */}
                       <div style={styles.cartItemThumbBox}>
                         {itemImg ? (
@@ -486,6 +528,19 @@ export default function PosPage() {
                         </div>
                         <div style={styles.cartItemSub}>
                           Code: {item.product.barcode}
+                          {item.stock_batch && (
+                            <span style={{
+                              marginLeft: '6px',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              backgroundColor: '#eff6ff',
+                              color: '#2563eb',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                            }}>
+                              {item.stock_batch}
+                            </span>
+                          )}
                         </div>
                         
                         {/* Dynamic Unit Price Input for Sales */}
@@ -497,7 +552,7 @@ export default function PosPage() {
                               step="0.5"
                               min="0"
                               value={item.unit_price}
-                              onChange={(e) => updateUnitPrice(item.product.id, e.target.value)}
+                              onChange={(e) => updateUnitPrice(item.product.id, item.product_stock_id, e.target.value)}
                               style={{
                                 ...styles.unitPriceInput,
                                 borderColor: isPriceModified ? '#f59e0b' : '#d1d5db',
@@ -518,7 +573,7 @@ export default function PosPage() {
                       {/* Quantity Controls */}
                       <div style={styles.cartQtyControls}>
                         <button
-                          onClick={() => updateQuantity(item.product.id, -1)}
+                          onClick={() => updateQuantity(item.product.id, item.product_stock_id, -1)}
                           style={styles.qtyBtn}
                           title="Diminuer"
                         >
@@ -526,7 +581,7 @@ export default function PosPage() {
                         </button>
                         <span style={styles.qtyNum}>{item.quantity}</span>
                         <button
-                          onClick={() => updateQuantity(item.product.id, 1)}
+                          onClick={() => updateQuantity(item.product.id, item.product_stock_id, 1)}
                           style={styles.qtyBtn}
                           title="Augmenter"
                         >
@@ -553,7 +608,7 @@ export default function PosPage() {
 
                       {/* Remove Button */}
                       <button
-                        onClick={() => removeFromCart(item.product.id)}
+                        onClick={() => removeFromCart(item.product.id, item.product_stock_id)}
                         style={styles.cartRemoveBtn}
                         title="Retirer l'article"
                       >
@@ -734,6 +789,98 @@ export default function PosPage() {
               style={styles.skipBtn}
             >
               Passer / Imprimer plus tard
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Multi-Stock / Batch Selection Modal for Cashier */}
+      <Modal
+        isOpen={isBatchModalOpen}
+        onClose={() => {
+          setIsBatchModalOpen(false);
+          setBatchModalProduct(null);
+        }}
+        title={`Choisir le lot — ${batchModalProduct?.name || ''}`}
+        maxWidth="440px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div style={{ fontSize: '13px', color: '#4b5563', lineHeight: '1.4' }}>
+            Ce produit dispose de plusieurs lots de stock avec des prix d'achat ou de vente distincts.
+            Sélectionnez le lot vendu :
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {(batchModalProduct?.activeStocks || []).map((stock, idx) => (
+              <button
+                key={stock.id}
+                type="button"
+                onClick={() => {
+                  addToCartWithStock(batchModalProduct, stock);
+                  setIsBatchModalOpen(false);
+                  setBatchModalProduct(null);
+                }}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '14px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #d1d5db',
+                  backgroundColor: '#ffffff',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.15s ease',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#2563eb';
+                  e.currentTarget.style.backgroundColor = '#eff6ff';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.backgroundColor = '#ffffff';
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: '700', fontSize: '14px', color: '#111827' }}>
+                    {stock.batch_number || `Lot #${idx + 1}`}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                    Stock disponible : <strong>{stock.quantity} unités</strong>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#2563eb' }}>
+                    {Number(stock.price).toFixed(2)} MAD
+                  </div>
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    color: '#059669',
+                    backgroundColor: '#ecfdf5',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    display: 'inline-block',
+                    marginTop: '2px',
+                  }}>
+                    Sélectionner →
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setIsBatchModalOpen(false);
+                setBatchModalProduct(null);
+              }}
+              style={styles.cancelBtn}
+            >
+              Annuler
             </button>
           </div>
         </div>

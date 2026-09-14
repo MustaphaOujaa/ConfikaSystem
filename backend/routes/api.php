@@ -43,6 +43,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/products/low-stock', [ProductController::class, 'lowStockAlerts']);
 
     // Products resource routes
+    Route::post('/products/{product}/restock', [ProductController::class, 'restock']);
+    Route::put('/products/{product}/stocks/{stock}', [ProductController::class, 'updateStock']);
+    Route::delete('/products/{product}/stocks/{stock}', [ProductController::class, 'deleteStock']);
     Route::apiResource('products', ProductController::class);
 
     // Categories resource routes

@@ -9,7 +9,7 @@ class TransactionItem extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['transaction_id', 'product_id', 'quantity', 'unit_price'];
+    protected $fillable = ['transaction_id', 'product_id', 'product_stock_id', 'quantity', 'unit_price'];
 
     public function transaction()
     {
@@ -19,5 +19,10 @@ class TransactionItem extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function stock()
+    {
+        return $this->belongsTo(ProductStock::class, 'product_stock_id');
     }
 }

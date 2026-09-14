@@ -14,7 +14,7 @@ class TransactionController extends Controller
 
     public function index()
     {
-        return response()->json(Transaction::with('items.product')->latest()->paginate(15));
+        return response()->json(Transaction::with(['items.product', 'items.stock'])->latest()->paginate(15));
     }
 
     public function store(Request $request)
@@ -23,6 +23,7 @@ class TransactionController extends Controller
             'type' => 'required|in:sale,purchase',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_stock_id' => 'nullable|exists:product_stocks,id',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_price' => 'nullable|numeric|min:0',
         ]);

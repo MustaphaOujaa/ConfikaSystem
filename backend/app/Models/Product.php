@@ -30,6 +30,33 @@ class Product extends Model
         return $this->hasMany(ProductImage::class);
     }
 
+    public function stocks(): HasMany
+    {
+        return $this->hasMany(ProductStock::class)->orderBy('id', 'asc');
+    }
+
+    public function activeStocks(): HasMany
+    {
+        return $this->hasMany(ProductStock::class)->where('quantity', '>', 0)->orderBy('id', 'asc');
+    }
+
+    /**
+     * Recalculates total product quantity and latest prices from stocks.
+     */
+    public function syncStockTotals(): void
+    {
+        $this->quantity = (int) $this->stocks()->sum('quantity');
+        
+        // Update product current selling price and cost to the latest active stock if present
+        $latestStock = $this->stocks()->latest()->first();
+        if ($latestStock) {
+            $this->price = $latestStock->price;
+            $this->cost_price = $latestStock->cost_price;
+        }
+
+        $this->saveQuietly();
+    }
+
     protected function casts(): array
     {
         return [

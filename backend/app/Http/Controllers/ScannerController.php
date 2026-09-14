@@ -57,7 +57,7 @@ class ScannerController extends Controller
     {
         $normalized = $this->normalizeAzertyBarcode($barcode);
 
-        $product = Product::with(['category', 'images'])
+        $product = Product::with(['category', 'brand', 'images', 'stocks', 'activeStocks'])
             ->where('barcode', $barcode)
             ->orWhere('barcode', $normalized)
             ->firstOrFail();
@@ -70,24 +70,37 @@ class ScannerController extends Controller
         $validated = $request->validate([
             'items' => ['required', 'array', 'min:1'],
             'items.*.barcode' => ['required', 'string'],
+            'items.*.product_stock_id' => ['sometimes', 'nullable', 'integer', 'exists:product_stocks,id'],
             'items.*.quantity' => ['sometimes', 'integer', 'min:1'],
             'items.*.unit_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
         ]);
 
         $items = collect($validated['items'])->map(function (array $item) {
             $normalized = $this->normalizeAzertyBarcode($item['barcode']);
-            $product = Product::where('barcode', $item['barcode'])
+            $product = Product::with('activeStocks')
+                ->where('barcode', $item['barcode'])
                 ->orWhere('barcode', $normalized)
                 ->firstOrFail();
 
+            $stockId = $item['product_stock_id'] ?? null;
+            $stock = null;
+            if ($stockId) {
+                $stock = $product->activeStocks->firstWhere('id', $stockId);
+            }
+
+            if (!$stock) {
+                $stock = $product->activeStocks->first();
+            }
+
             $unitPrice = isset($item['unit_price']) && is_numeric($item['unit_price']) && (float) $item['unit_price'] >= 0
                 ? (float) $item['unit_price']
-                : (float) $product->price;
+                : (float) ($stock ? $stock->price : $product->price);
 
             return [
-                'product_id' => $product->id,
-                'quantity' => $item['quantity'] ?? 1,
-                'unit_price' => $unitPrice,
+                'product_id'       => $product->id,
+                'product_stock_id' => $stock?->id,
+                'quantity'         => $item['quantity'] ?? 1,
+                'unit_price'       => $unitPrice,
             ];
         })->all();
 

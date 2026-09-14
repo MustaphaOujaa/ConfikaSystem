@@ -7,6 +7,9 @@ import {
   Package, 
   AlertTriangle,
   TrendingUp,
+  Layers,
+  Check,
+  X,
   Barcode as BarcodeIcon
 } from 'lucide-react';
 import { useSelector } from 'react-redux';
@@ -16,7 +19,10 @@ import {
   useGetBrandsQuery,
   useCreateProductMutation, 
   useUpdateProductMutation, 
-  useDeleteProductMutation 
+  useDeleteProductMutation,
+  useRestockProductMutation,
+  useUpdateProductStockMutation,
+  useDeleteProductStockMutation 
 } from '../api/apiSlice';
 import Modal from '../components/common/Modal';
 import Pagination from '../components/common/Pagination';
@@ -55,6 +61,21 @@ export default function ProductsPage() {
   const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
   const [selectedLabelProduct, setSelectedLabelProduct] = useState(null);
 
+  // Restock / Multi-Batch modal state
+  const [isRestockModalOpen, setIsRestockModalOpen] = useState(false);
+  const [restockProductTarget, setRestockProductTarget] = useState(null);
+  const [restockMode, setRestockMode] = useState('existing'); // 'existing' | 'new'
+  const [selectedStockId, setSelectedStockId] = useState('');
+  const [restockForm, setRestockForm] = useState({
+    quantity: '',
+    cost_price: '',
+    price: '',
+    batch_number: '',
+  });
+  const [restockError, setRestockError] = useState('');
+  const [editingBatchId, setEditingBatchId] = useState(null);
+  const [editingBatchName, setEditingBatchName] = useState('');
+
   // Form states
   const emptyForm = { 
     name: '', 
@@ -86,6 +107,9 @@ export default function ProductsPage() {
   const [createProduct, { isLoading: creating }] = useCreateProductMutation();
   const [updateProduct, { isLoading: updating }] = useUpdateProductMutation();
   const [deleteProduct] = useDeleteProductMutation();
+  const [restockProduct, { isLoading: restocking }] = useRestockProductMutation();
+  const [updateProductStock, { isLoading: updatingStock }] = useUpdateProductStockMutation();
+  const [deleteProductStock, { isLoading: deletingStock }] = useDeleteProductStockMutation();
 
   const categories = categoriesData?.data || categoriesData || [];
   const brands = brandsData?.data || brandsData || [];
@@ -177,9 +201,138 @@ export default function ProductsPage() {
     setIsLabelModalOpen(true);
   };
 
+  const handleOpenRestock = (product) => {
+    setRestockProductTarget(product);
+    const activeStocks = product.active_stocks || product.stocks || [];
+    const firstStock = activeStocks[0];
+    
+    // Default to existing if there is an active stock, or new if none
+    if (firstStock) {
+      setRestockMode('existing');
+      setSelectedStockId(firstStock.id);
+      setRestockForm({
+        quantity: '',
+        cost_price: firstStock.cost_price || product.cost_price || '',
+        price: firstStock.price || product.price || '',
+        batch_number: '',
+      });
+    } else {
+      setRestockMode('new');
+      setSelectedStockId('');
+      setRestockForm({
+        quantity: '',
+        cost_price: product.cost_price || '',
+        price: product.price || '',
+        batch_number: '',
+      });
+    }
+    setRestockError('');
+    setIsRestockModalOpen(true);
+  };
+
+  const handleRestockSubmit = async (e) => {
+    e.preventDefault();
+    if (!restockProductTarget) return;
+    setRestockError('');
+
+    const qty = parseInt(restockForm.quantity, 10);
+    if (isNaN(qty) || qty <= 0) {
+      setRestockError('Veuillez spécifier une quantité valide (au moins 1).');
+      return;
+    }
+
+    const payload = {
+      id: restockProductTarget.id,
+      quantity: qty,
+      cost_price: restockForm.cost_price !== '' ? parseFloat(restockForm.cost_price) : undefined,
+      price: restockForm.price !== '' ? parseFloat(restockForm.price) : undefined,
+    };
+
+    if (restockMode === 'existing') {
+      if (!selectedStockId) {
+        setRestockError('Veuillez sélectionner un lot existant.');
+        return;
+      }
+      payload.stock_id = selectedStockId;
+    } else {
+      if (restockForm.batch_number.trim()) {
+        payload.batch_number = restockForm.batch_number.trim();
+      }
+    }
+
+    try {
+      await restockProduct(payload).unwrap();
+      setIsRestockModalOpen(false);
+      setRestockProductTarget(null);
+    } catch (err) {
+      setRestockError(err?.data?.message || 'Échec du réapprovisionnement.');
+    }
+  };
+
+  const handleStartEditBatchName = (stock) => {
+    setEditingBatchId(stock.id);
+    setEditingBatchName(stock.batch_number || '');
+    setRestockError('');
+  };
+
+  const handleCancelEditBatchName = () => {
+    setEditingBatchId(null);
+    setEditingBatchName('');
+  };
+
+  const handleSaveBatchName = async (stockId) => {
+    if (!restockProductTarget) return;
+    setRestockError('');
+    try {
+      const updatedProduct = await updateProductStock({
+        productId: restockProductTarget.id,
+        stockId,
+        batch_number: editingBatchName.trim() || `Lot #${stockId}`,
+      }).unwrap();
+      setRestockProductTarget(updatedProduct);
+      setEditingBatchId(null);
+      setEditingBatchName('');
+    } catch (err) {
+      setRestockError(err?.data?.message || 'Échec de la modification du nom du lot.');
+    }
+  };
+
+  const handleDeleteBatch = async (stockId) => {
+    if (!restockProductTarget) return;
+    if (!window.confirm('Voulez-vous vraiment supprimer ce lot de stock ?')) return;
+    setRestockError('');
+    try {
+      const updatedProduct = await deleteProductStock({
+        productId: restockProductTarget.id,
+        stockId,
+      }).unwrap();
+      setRestockProductTarget(updatedProduct);
+      // If deleted stock was selected, switch to first available stock
+      const remaining = updatedProduct.stocks || [];
+      if (selectedStockId === stockId) {
+        setSelectedStockId(remaining[0]?.id || '');
+      }
+    } catch (err) {
+      setRestockError(err?.data?.message || 'Échec de la suppression du lot.');
+    }
+  };
+
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
+
+    // Check if barcode already exists in loaded products to help admin avoid duplicate error
+    const inputBarcode = formData.barcode ? formData.barcode.trim() : '';
+    if (inputBarcode) {
+      const existingProduct = products.find((p) => p.barcode === inputBarcode);
+      if (existingProduct) {
+        if (window.confirm(`Le produit "${existingProduct.name}" utilise déjà ce code-barres (${inputBarcode}). Voulez-vous ouvrir la fenêtre de Réapprovisionnement / Nouveau Lot pour ce produit ?`)) {
+          setIsAddModalOpen(false);
+          handleOpenRestock(existingProduct);
+          return;
+        }
+      }
+    }
 
     const payload = new FormData();
     payload.append('name', formData.name);
@@ -389,6 +542,12 @@ export default function ProductsPage() {
                         {p.barcode && (
                           <button onClick={() => handleOpenBarcodeLabel(p)} style={styles.iconBtn} title="Imprimer l'étiquette code-barres">
                             <BarcodeIcon size={16} color="#4f46e5" />
+                          </button>
+                        )}
+                        {/* Restock / Lots: admin only */}
+                        {isAdmin && (
+                          <button onClick={() => handleOpenRestock(p)} style={{ ...styles.iconBtn, color: '#059669', borderColor: '#a7f3d0', backgroundColor: '#f0fdf4' }} title="Réapprovisionner / Gérer les Lots de Stock">
+                            <Layers size={16} />
                           </button>
                         )}
                         {/* Edit: visible to all (caissier sees info-only form, admin sees full form) */}
@@ -731,6 +890,288 @@ export default function ProductsPage() {
         </form>
       </Modal>
 
+
+      {/* Restock & Batch Management Modal */}
+      <Modal
+        isOpen={isRestockModalOpen}
+        onClose={() => {
+          setIsRestockModalOpen(false);
+          setRestockProductTarget(null);
+        }}
+        title={`Réapprovisionnement — ${restockProductTarget?.name || ''}`}
+      >
+        {restockError && <div style={styles.formError}>{restockError}</div>}
+        
+        {restockProductTarget && (
+          <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '13px', color: '#6b7280' }}>Code-barres: <strong>{restockProductTarget.barcode || 'Sans code'}</strong></span>
+              <span style={{ fontSize: '13px', color: '#6b7280' }}>Stock total actuel: <strong style={{ color: '#059669' }}>{restockProductTarget.quantity} unités</strong></span>
+            </div>
+
+            {/* List of existing batches */}
+            <div style={{ marginTop: '8px' }}>
+              <span style={{ fontSize: '12px', fontWeight: '600', color: '#4b5563', textTransform: 'uppercase' }}>Lots existants :</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                {(restockProductTarget.stocks || []).map((s, idx) => (
+                  <div 
+                    key={s.id} 
+                    style={{ 
+                      padding: '8px 10px', 
+                      borderRadius: '6px', 
+                      backgroundColor: s.quantity > 0 ? '#ffffff' : '#f3f4f6', 
+                      border: s.id === selectedStockId && restockMode === 'existing' ? '2px solid #059669' : '1px solid #e5e7eb',
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '12px'
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {editingBatchId === s.id ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <input
+                            type="text"
+                            value={editingBatchName}
+                            onChange={(e) => setEditingBatchName(e.target.value)}
+                            placeholder="Nom du lot"
+                            style={{
+                              padding: '3px 6px',
+                              fontSize: '12px',
+                              border: '1px solid #2563eb',
+                              borderRadius: '4px',
+                              outline: 'none',
+                              flex: 1,
+                            }}
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveBatchName(s.id);
+                              } else if (e.key === 'Escape') {
+                                handleCancelEditBatchName();
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveBatchName(s.id)}
+                            disabled={updatingStock}
+                            style={{ padding: '3px 6px', backgroundColor: '#059669', color: '#ffffff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                            title="Valider"
+                          >
+                            <Check size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelEditBatchName}
+                            style={{ padding: '3px 6px', backgroundColor: '#9ca3af', color: '#ffffff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                            title="Annuler"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <strong>{s.batch_number || `Lot #${idx + 1}`}</strong>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditBatchName(s)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '1px 3px', color: '#4b5563' }}
+                            title="Modifier le nom de ce lot"
+                          >
+                            <Edit size={13} />
+                          </button>
+                          <span style={{ color: '#6b7280' }}>
+                            Coût: {Number(s.cost_price).toFixed(2)} MAD | Vente: {Number(s.price).toFixed(2)} MAD
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ 
+                        fontWeight: '700', 
+                        color: s.quantity > 0 ? '#059669' : '#9ca3af',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        backgroundColor: s.quantity > 0 ? '#ecfdf5' : '#e5e7eb',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {s.quantity} en stock
+                      </span>
+
+                      {/* Delete batch button (only if more than 1 batch exists) */}
+                      {(restockProductTarget.stocks || []).length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBatch(s.id)}
+                          disabled={deletingStock}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#dc2626',
+                            padding: '2px 4px',
+                            borderRadius: '3px',
+                          }}
+                          title="Supprimer ce lot"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mode Selector: Add to existing batch vs Create new batch */}
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+          <button
+            type="button"
+            onClick={() => setRestockMode('existing')}
+            style={{
+              flex: 1,
+              padding: '10px',
+              borderRadius: '6px',
+              border: restockMode === 'existing' ? '2px solid #059669' : '1px solid #d1d5db',
+              backgroundColor: restockMode === 'existing' ? '#ecfdf5' : '#ffffff',
+              color: restockMode === 'existing' ? '#059669' : '#374151',
+              fontWeight: '600',
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            1. Ajouter à un lot existant
+          </button>
+          <button
+            type="button"
+            onClick={() => setRestockMode('new')}
+            style={{
+              flex: 1,
+              padding: '10px',
+              borderRadius: '6px',
+              border: restockMode === 'new' ? '2px solid #2563eb' : '1px solid #d1d5db',
+              backgroundColor: restockMode === 'new' ? '#eff6ff' : '#ffffff',
+              color: restockMode === 'new' ? '#2563eb' : '#374151',
+              fontWeight: '600',
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            2. Créer un NOUVEAU lot (Nouveau Prix)
+          </button>
+        </div>
+
+        <form onSubmit={handleRestockSubmit} style={styles.form}>
+          {restockMode === 'existing' ? (
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Sélectionnez le lot à approvisionner *</label>
+              <select
+                required
+                value={selectedStockId}
+                onChange={(e) => {
+                  const sId = parseInt(e.target.value, 10);
+                  setSelectedStockId(sId);
+                  const st = (restockProductTarget?.stocks || []).find((s) => s.id === sId);
+                  if (st) {
+                    setRestockForm((prev) => ({
+                      ...prev,
+                      cost_price: st.cost_price || '',
+                      price: st.price || '',
+                    }));
+                  }
+                }}
+                style={styles.input}
+              >
+                {(restockProductTarget?.stocks || []).map((s, idx) => (
+                  <option key={s.id} value={s.id}>
+                    {s.batch_number || `Lot #${idx + 1}`} — Vente: {Number(s.price).toFixed(2)} MAD (Reste: {s.quantity})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Numéro / Nom du nouveau lot (optionnel)</label>
+              <input
+                type="text"
+                value={restockForm.batch_number}
+                onChange={(e) => setRestockForm({ ...restockForm, batch_number: e.target.value })}
+                placeholder="ex: LOT-ARRIVAGE-OCTOBRE"
+                style={styles.input}
+              />
+            </div>
+          )}
+
+          <div className="responsive-form-row" style={styles.formRow}>
+            <div style={{ ...styles.formGroup, flex: 1 }}>
+              <label style={styles.label}>Prix d'Achat (Coût unitaire) {restockMode === 'new' ? '*' : '(optionnel)'}</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={restockForm.cost_price}
+                onChange={(e) => setRestockForm({ ...restockForm, cost_price: e.target.value })}
+                placeholder="ex: 22.00"
+                style={styles.input}
+              />
+            </div>
+            <div style={{ ...styles.formGroup, flex: 1 }}>
+              <label style={styles.label}>Prix de Vente {restockMode === 'new' ? '*' : '(optionnel)'}</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={restockForm.price}
+                onChange={(e) => setRestockForm({ ...restockForm, price: e.target.value })}
+                placeholder="ex: 32.00"
+                style={styles.input}
+              />
+            </div>
+          </div>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Quantité à ajouter *</label>
+            <input
+              type="number"
+              min="1"
+              required
+              value={restockForm.quantity}
+              onChange={(e) => setRestockForm({ ...restockForm, quantity: e.target.value })}
+              placeholder="ex: 20"
+              style={styles.input}
+            />
+          </div>
+
+          <div style={styles.modalActions}>
+            <button
+              type="button"
+              onClick={() => {
+                setIsRestockModalOpen(false);
+                setRestockProductTarget(null);
+              }}
+              style={styles.cancelBtn}
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={restocking}
+              style={{
+                ...styles.saveBtn,
+                backgroundColor: restockMode === 'new' ? '#2563eb' : '#059669',
+              }}
+            >
+              {restocking ? 'Enregistrement...' : restockMode === 'new' ? 'Créer le lot & Réapprovisionner' : 'Ajouter au lot'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Barcode Label Printing Modal */}
       <BarcodeLabelModal
