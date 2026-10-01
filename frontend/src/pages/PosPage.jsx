@@ -375,11 +375,10 @@ export default function PosPage() {
   };
 
   const updateUnitPrice = (productId, stockId, newPrice) => {
-    const parsed = Math.max(0, parseFloat(newPrice) || 0);
     setCart((prevCart) =>
       prevCart.map((item) =>
         item.product.id === productId && item.product_stock_id === stockId
-          ? { ...item, unit_price: parsed }
+          ? { ...item, unit_price: newPrice }
           : item
       )
     );
@@ -399,7 +398,7 @@ export default function PosPage() {
   };
 
   const totalAmount = cart.reduce(
-    (sum, item) => sum + item.quantity * item.unit_price,
+    (sum, item) => sum + (item.quantity || 0) * (parseFloat(item.unit_price) || 0),
     0
   );
 
@@ -428,7 +427,7 @@ export default function PosPage() {
             barcode: item.product.barcode,
             product_stock_id: item.product_stock_id || undefined,
             quantity: item.quantity,
-            unit_price: item.unit_price,
+            unit_price: Math.max(0, parseFloat(item.unit_price) || 0),
           })),
         };
         result = await processScannerSale(payload).unwrap();
@@ -665,7 +664,7 @@ export default function PosPage() {
               <div style={styles.cartList}>
                 {cart.map((item) => {
                   const itemImg = item.product.images && item.product.images.length > 0 ? item.product.images[0].path : null;
-                  const isPriceModified = transactionType === 'sale' && item.unit_price !== parseFloat(item.product.price);
+                  const isPriceModified = transactionType === 'sale' && (parseFloat(item.unit_price) || 0) !== parseFloat(item.product.price);
 
                   return (
                     <div key={`${item.product.id}-${item.product_stock_id || 'default'}`} style={styles.cartItemRow}>
@@ -720,6 +719,11 @@ export default function PosPage() {
                               min="0"
                               value={item.unit_price}
                               onChange={(e) => updateUnitPrice(item.product.id, item.product_stock_id, e.target.value)}
+                              onBlur={() => {
+                                if (item.unit_price === '' || isNaN(parseFloat(item.unit_price))) {
+                                  updateUnitPrice(item.product.id, item.product_stock_id, parseFloat(item.product.price) || 0);
+                                }
+                              }}
                               style={{
                                 ...styles.unitPriceInput,
                                 borderColor: isPriceModified ? '#f59e0b' : '#d1d5db',
@@ -760,7 +764,7 @@ export default function PosPage() {
                       {transactionType === 'sale' ? (
                         <div style={styles.cartPriceBox}>
                           <div style={{ fontWeight: '700', color: '#dc2626', fontSize: '13px' }}>
-                            {(item.quantity * item.unit_price).toFixed(2)} MAD
+                            {((item.quantity || 0) * (parseFloat(item.unit_price) || 0)).toFixed(2)} MAD
                           </div>
                         </div>
                       ) : isAdmin ? (
@@ -855,32 +859,52 @@ export default function PosPage() {
           </p>
 
           <div style={styles.priceReviewList}>
-            {cart.map((item) => (
-              <div key={item.product.id} style={styles.priceReviewRow}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={styles.priceReviewName}>{item.product.name}</div>
-                  <div style={styles.priceReviewSub}>
-                    Qté: <strong>{item.quantity}</strong> × Prix Unit:
+            {cart.map((item) => {
+              const itemKey = `${item.product.id}-${item.product_stock_id || 'default'}`;
+              const unitPriceNum = parseFloat(item.unit_price) || 0;
+              const isModified = transactionType === 'sale' && unitPriceNum !== parseFloat(item.product.price);
+
+              return (
+                <div key={itemKey} style={styles.priceReviewRow}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={styles.priceReviewName}>{item.product.name}</div>
+                    <div style={styles.priceReviewSub}>
+                      Qté: <strong>{item.quantity}</strong> × Prix Unit:
+                      {item.stock_batch && (
+                        <span style={{ marginLeft: '6px', color: '#2563eb', fontWeight: '600' }}>
+                          ({item.stock_batch})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={styles.priceReviewInputGroup}>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={item.unit_price}
+                      onChange={(e) => updateUnitPrice(item.product.id, item.product_stock_id, e.target.value)}
+                      onBlur={() => {
+                        if (item.unit_price === '' || isNaN(parseFloat(item.unit_price))) {
+                          updateUnitPrice(item.product.id, item.product_stock_id, parseFloat(item.product.price) || 0);
+                        }
+                      }}
+                      style={{
+                        ...styles.priceReviewInput,
+                        borderColor: isModified ? '#f59e0b' : '#d1d5db',
+                        backgroundColor: isModified ? '#fffbeb' : '#ffffff',
+                      }}
+                    />
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>MAD</span>
+                  </div>
+
+                  <div style={styles.priceReviewSubtotal}>
+                    {((item.quantity || 0) * unitPriceNum).toFixed(2)} MAD
                   </div>
                 </div>
-
-                <div style={styles.priceReviewInputGroup}>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    value={item.unit_price}
-                    onChange={(e) => updateUnitPrice(item.product.id, e.target.value)}
-                    style={styles.priceReviewInput}
-                  />
-                  <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>MAD</span>
-                </div>
-
-                <div style={styles.priceReviewSubtotal}>
-                  {(item.quantity * item.unit_price).toFixed(2)} MAD
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div style={styles.priceReviewTotalBox}>
