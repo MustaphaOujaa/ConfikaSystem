@@ -9,10 +9,15 @@ class Transaction extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['type', 'total_amount', 'transaction_date'];
+    protected $fillable = ['type', 'total_amount', 'return_status', 'transaction_date'];
 
     public function items()
     {
         return $this->hasMany(TransactionItem::class);
+    }
+
+    public function returns()
+    {
+        return $this->hasMany(ProductReturn::class);
     }
 }

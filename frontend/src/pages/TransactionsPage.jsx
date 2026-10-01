@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Eye, 
   Plus, 
   TrendingUp, 
   TrendingDown, 
   Printer,
-  X 
+  X,
+  RotateCcw
 } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { 
@@ -20,6 +22,7 @@ import { selectCurrentUser } from '../store/authSlice';
 export default function TransactionsPage() {
   const user = useSelector(selectCurrentUser);
   const isAdmin = user?.role === 'admin';
+  const navigate = useNavigate();
 
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState('');
@@ -178,21 +181,34 @@ export default function TransactionsPage() {
                     #{tx.id}
                   </td>
                   <td style={styles.td}>
-                    <span
-                      style={{
-                        ...styles.typeBadge,
-                        backgroundColor: tx.type === 'sale' ? '#ecfdf5' : '#eff6ff',
-                        color: tx.type === 'sale' ? '#059669' : '#2563eb',
-                        borderColor: tx.type === 'sale' ? '#a7f3d0' : '#bfdbfe',
-                      }}
-                    >
-                      {tx.type === 'sale' ? (
-                        <TrendingUp size={12} style={{ marginRight: '4px' }} />
-                      ) : (
-                        <TrendingDown size={12} style={{ marginRight: '4px' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      <span
+                        style={{
+                          ...styles.typeBadge,
+                          backgroundColor: tx.type === 'sale' ? '#ecfdf5' : '#eff6ff',
+                          color: tx.type === 'sale' ? '#059669' : '#2563eb',
+                          borderColor: tx.type === 'sale' ? '#a7f3d0' : '#bfdbfe',
+                        }}
+                      >
+                        {tx.type === 'sale' ? (
+                          <TrendingUp size={12} style={{ marginRight: '4px' }} />
+                        ) : (
+                          <TrendingDown size={12} style={{ marginRight: '4px' }} />
+                        )}
+                        {tx.type === 'sale' ? 'VENTE' : 'ACHAT'}
+                      </span>
+
+                      {tx.return_status === 'full' && (
+                        <span style={styles.returnFullBadge} title="Cette vente a été totalement retournée">
+                          RETOURNÉ
+                        </span>
                       )}
-                      {tx.type === 'sale' ? 'VENTE' : 'ACHAT'}
-                    </span>
+                      {tx.return_status === 'partial' && (
+                        <span style={styles.returnPartialBadge} title="Des articles ont été partiellement retournés">
+                          RETOUR PARTIEL
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td style={styles.td}>
                     {new Date(tx.transaction_date || tx.created_at).toLocaleString('fr-FR')}
@@ -215,6 +231,16 @@ export default function TransactionsPage() {
                   </td>
                   <td style={{ ...styles.td, textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '6px' }}>
+                      {tx.type === 'sale' && tx.return_status !== 'full' && (
+                        <button
+                          onClick={() => navigate(`/returns?txId=${tx.id}`)}
+                          style={styles.returnActionBtn}
+                          title="Effectuer un retour sur cette vente"
+                        >
+                          <RotateCcw size={14} />
+                          <span style={{ marginLeft: '4px' }}>Retour</span>
+                        </button>
+                      )}
                       {(tx.type === 'sale' || isAdmin) && (
                         <button
                           onClick={() => handlePrintBladeReceipt(tx.id)}
@@ -280,7 +306,14 @@ export default function TransactionsPage() {
             <tbody>
               {selectedTx?.items?.map((item) => (
                 <tr key={item.id}>
-                  <td>{item.product?.name || `Produit #${item.product_id}`}</td>
+                  <td>
+                    <div style={{ fontWeight: '500' }}>{item.product?.name || `Produit #${item.product_id}`}</div>
+                    {item.returned_quantity > 0 && (
+                      <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: '600' }}>
+                        Dont {item.returned_quantity} retourné{item.returned_quantity > 1 ? 's' : ''} (Restant: {Math.max(0, item.quantity - item.returned_quantity)})
+                      </div>
+                    )}
+                  </td>
                   <td style={{ textAlign: 'center', fontWeight: '600' }}>
                     {selectedTx?.type === 'purchase' ? `+${item.quantity}` : item.quantity}
                   </td>
@@ -296,6 +329,21 @@ export default function TransactionsPage() {
               ))}
             </tbody>
           </table>
+
+          {selectedTx?.returns?.length > 0 && (
+            <div style={styles.returnsSummaryBox}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: '#991b1b', marginBottom: '6px' }}>
+                <RotateCcw size={14} />
+                <span>Retours enregistrés sur cette vente ({selectedTx.returns.length}) :</span>
+              </div>
+              {selectedTx.returns.map((ret) => (
+                <div key={ret.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', padding: '3px 0', borderBottom: '1px dashed #fecaca' }}>
+                  <span>Bon #RET-{ret.id} ({new Date(ret.created_at).toLocaleDateString('fr-FR')}) - {ret.reason || 'Retour'}</span>
+                  <strong style={{ color: '#dc2626' }}>-{Number(ret.refund_amount).toFixed(2)} MAD</strong>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div style={styles.detailsTotalRow}>
             {selectedTx?.type === 'sale' ? (
@@ -318,15 +366,31 @@ export default function TransactionsPage() {
             )}
           </div>
 
-          {(selectedTx?.type === 'sale' || isAdmin) && (
-            <button
-              onClick={() => handlePrintBladeReceipt(selectedTx?.id)}
-              style={styles.modalPrintBtn}
-            >
-              <Printer size={16} style={{ marginRight: '6px' }} />
-              <span>Imprimer le Ticket</span>
-            </button>
-          )}
+          <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+            {selectedTx?.type === 'sale' && selectedTx?.return_status !== 'full' && (
+              <button
+                onClick={() => {
+                  setIsDetailsOpen(false);
+                  navigate(`/returns?txId=${selectedTx.id}`);
+                }}
+                style={styles.modalReturnBtn}
+                title="Effectuer un retour d'article sur cette vente"
+              >
+                <RotateCcw size={16} style={{ marginRight: '6px' }} />
+                <span>Effectuer un Retour</span>
+              </button>
+            )}
+
+            {(selectedTx?.type === 'sale' || isAdmin) && (
+              <button
+                onClick={() => handlePrintBladeReceipt(selectedTx?.id)}
+                style={styles.modalPrintBtn}
+              >
+                <Printer size={16} style={{ marginRight: '6px' }} />
+                <span>Imprimer le Ticket</span>
+              </button>
+            )}
+          </div>
         </div>
       </Modal>
 
@@ -689,6 +753,60 @@ const styles = {
     fontSize: '14px',
     fontWeight: '600',
     color: '#ffffff',
+    cursor: 'pointer',
+  },
+  returnFullBadge: {
+    backgroundColor: '#fee2e2',
+    color: '#dc2626',
+    border: '1px solid #fecaca',
+    padding: '2px 7px',
+    borderRadius: '4px',
+    fontSize: '11px',
+    fontWeight: '700',
+    letterSpacing: '0.3px',
+  },
+  returnPartialBadge: {
+    backgroundColor: '#fef3c7',
+    color: '#b45309',
+    border: '1px solid #fde68a',
+    padding: '2px 7px',
+    borderRadius: '4px',
+    fontSize: '11px',
+    fontWeight: '700',
+    letterSpacing: '0.3px',
+  },
+  returnActionBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '6px 10px',
+    backgroundColor: '#fef2f2',
+    color: '#dc2626',
+    border: '1px solid #fecaca',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'background-color 0.15s ease',
+  },
+  returnsSummaryBox: {
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fecaca',
+    borderRadius: '6px',
+    padding: '10px 14px',
+    marginBottom: '14px',
+  },
+  modalReturnBtn: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '10px',
+    backgroundColor: '#dc2626',
+    color: '#ffffff',
+    borderRadius: '6px',
+    border: 'none',
+    fontWeight: '700',
+    fontSize: '14px',
     cursor: 'pointer',
   },
 };

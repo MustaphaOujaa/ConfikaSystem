@@ -13,7 +13,7 @@ export const apiSlice = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Product', 'Category', 'Brand', 'Transaction', 'LowStock', 'DailyReport', 'Cashier'],
+  tagTypes: ['Product', 'Category', 'Brand', 'Transaction', 'Return', 'LowStock', 'DailyReport', 'Cashier'],
   endpoints: (builder) => ({
     // Auth
     login: builder.mutation({
@@ -315,6 +315,26 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ['Transaction', { type: 'Product', id: 'LIST' }, 'LowStock', 'DailyReport'],
     }),
+
+    // Product Returns
+    getReturns: builder.query({
+      query: (params = {}) => {
+        const queryParams = new URLSearchParams(params).toString();
+        return `/returns${queryParams ? `?${queryParams}` : ''}`;
+      },
+      providesTags: ['Return'],
+    }),
+    lookupReturnTransaction: builder.query({
+      query: (id) => `/returns/lookup/${id}`,
+    }),
+    createReturn: builder.mutation({
+      query: (returnData) => ({
+        url: '/returns',
+        method: 'POST',
+        body: returnData,
+      }),
+      invalidatesTags: ['Return', 'Transaction', { type: 'Product', id: 'LIST' }, 'LowStock', 'DailyReport'],
+    }),
   }),
 });
 
@@ -357,4 +377,8 @@ export const {
   useCreateTransactionMutation,
   useLazyGetScannerProductQuery,
   useProcessScannerSaleMutation,
+  useGetReturnsQuery,
+  useLazyGetReturnsQuery,
+  useLazyLookupReturnTransactionQuery,
+  useCreateReturnMutation,
 } = apiSlice;
