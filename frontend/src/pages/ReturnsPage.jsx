@@ -4,7 +4,6 @@ import {
   RotateCcw, 
   Search, 
   Plus, 
-  Printer, 
   Eye, 
   CheckCircle2, 
   AlertCircle, 
@@ -83,10 +82,6 @@ export default function ReturnsPage() {
     lastPage: returnsData.last_page || 1,
     total: returnsData.total || returns.length,
   } : { currentPage: 1, lastPage: 1, total: 0 };
-
-  const handlePrintReturnReceipt = (returnId) => {
-    window.open(`/returns/${returnId}/receipt`, '_blank', 'width=400,height=600');
-  };
 
   const handleOpenNewReturn = (prefillTxId = '') => {
     setSearchTxId(prefillTxId ? String(prefillTxId) : '');
@@ -354,24 +349,14 @@ export default function ReturnsPage() {
                       </span>
                     </td>
                     <td style={{ ...styles.td, textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', gap: '6px' }}>
-                        <button
-                          onClick={() => handlePrintReturnReceipt(ret.id)}
-                          style={styles.printActionBtn}
-                          title="Imprimer le bon de retour"
-                        >
-                          <Printer size={14} style={{ marginRight: '4px' }} />
-                          <span>Ticket</span>
-                        </button>
-                        <button
-                          onClick={() => handleOpenDetails(ret)}
-                          style={styles.detailsActionBtn}
-                          title="Voir les détails"
-                        >
-                          <Eye size={14} style={{ marginRight: '4px' }} />
-                          <span>Détails</span>
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => handleOpenDetails(ret)}
+                        style={styles.detailsActionBtn}
+                        title="Voir les détails"
+                      >
+                        <Eye size={14} style={{ marginRight: '6px' }} />
+                        <span>Détails</span>
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -394,30 +379,30 @@ export default function ReturnsPage() {
         isOpen={isNewReturnOpen}
         onClose={() => setIsNewReturnOpen(false)}
         title="Effectuer un Retour Produit"
-        maxWidth="750px"
+        maxWidth="1020px"
       >
         {lastCreatedReturn ? (
           /* Success Screen */
           <div style={styles.successContainer}>
-            <CheckCircle2 size={54} style={{ color: '#059669', marginBottom: '16px' }} />
+            <CheckCircle2 size={56} style={{ color: '#059669', marginBottom: '16px' }} />
             <h3 style={styles.successTitle}>Retour Validé avec Succès !</h3>
             <p style={styles.successSub}>
-              Le montant de <strong>{Number(lastCreatedReturn.refund_amount).toFixed(2)} MAD</strong> a été remboursé au client et les quantités remises en stock ont été actualisées.
+              Le montant de <strong>{Number(lastCreatedReturn.refund_amount).toFixed(2)} MAD</strong> a été remboursé au client et les quantités ont été réintégrées au stock.
             </p>
 
             <div style={styles.successActions}>
-              <button
-                onClick={() => handlePrintReturnReceipt(lastCreatedReturn.id)}
-                style={styles.successPrintBtn}
-              >
-                <Printer size={16} style={{ marginRight: '8px' }} />
-                <span>Imprimer le Bon de Remboursement</span>
-              </button>
               <button
                 onClick={() => setIsNewReturnOpen(false)}
                 style={styles.successCloseBtn}
               >
                 Fermer
+              </button>
+              <button
+                onClick={() => handleOpenNewReturn()}
+                style={styles.successNewBtn}
+              >
+                <Plus size={16} style={{ marginRight: '6px' }} />
+                <span>Nouveau Retour</span>
               </button>
             </div>
           </div>
@@ -468,26 +453,36 @@ export default function ReturnsPage() {
 
             {/* Step 2: Loaded Transaction Review & Selection */}
             {loadedTx && (
-              <form onSubmit={handleSubmitReturn} style={{ marginTop: '16px' }}>
+              <form onSubmit={handleSubmitReturn} style={{ marginTop: '18px' }}>
+                {/* Transaction Summary Card */}
                 <div style={styles.txInfoCard}>
-                  <div style={styles.txInfoRow}>
-                    <div>
-                      <span style={styles.txInfoLabel}>Ticket N°:</span>
-                      <strong> #{loadedTx.id}</strong>
+                  <div style={styles.txInfoGrid}>
+                    <div style={styles.txTile}>
+                      <span style={styles.txTileLabel}>Ticket N° :</span>
+                      <strong style={styles.txTileValue}>#{loadedTx.id}</strong>
                     </div>
-                    <div>
-                      <span style={styles.txInfoLabel}>Date Vente:</span>
-                      <span> {new Date(loadedTx.transaction_date || loadedTx.created_at).toLocaleString('fr-FR')}</span>
+                    <div style={styles.txTile}>
+                      <span style={styles.txTileLabel}>Date Vente :</span>
+                      <span style={styles.txTileText}>
+                        {new Date(loadedTx.transaction_date || loadedTx.created_at).toLocaleString('fr-FR')}
+                      </span>
                     </div>
-                    <div>
-                      <span style={styles.txInfoLabel}>Montant Initial:</span>
-                      <strong style={{ color: '#059669' }}> {Number(loadedTx.total_amount).toFixed(2)} MAD</strong>
+                    <div style={styles.txTile}>
+                      <span style={styles.txTileLabel}>Montant Initial :</span>
+                      <strong style={{ ...styles.txTileValue, color: '#059669' }}>
+                        {Number(loadedTx.total_amount).toFixed(2)} MAD
+                      </strong>
                     </div>
-                    <div>
-                      <span style={styles.txInfoLabel}>Statut Retour:</span>
+                    <div style={styles.txTile}>
+                      <span style={styles.txTileLabel}>Statut Vente :</span>
                       <span style={{ 
+                        display: 'inline-block',
+                        padding: '3px 10px',
+                        borderRadius: '6px',
                         fontWeight: '700',
-                        color: loadedTx.return_status === 'full' ? '#dc2626' : loadedTx.return_status === 'partial' ? '#d97706' : '#16a34a'
+                        fontSize: '12px',
+                        backgroundColor: loadedTx.return_status === 'full' ? '#fee2e2' : loadedTx.return_status === 'partial' ? '#fef3c7' : '#dcfce7',
+                        color: loadedTx.return_status === 'full' ? '#dc2626' : loadedTx.return_status === 'partial' ? '#b45309' : '#166534',
                       }}>
                         {loadedTx.return_status === 'full' ? 'Totalement Retourné' : loadedTx.return_status === 'partial' ? 'Partiellement Retourné' : 'Aucun retour'}
                       </span>
@@ -503,58 +498,108 @@ export default function ReturnsPage() {
                   <table style={styles.itemsTable}>
                     <thead>
                       <tr>
-                        <th style={{ textAlign: 'left' }}>Article</th>
-                        <th style={{ textAlign: 'center' }}>Vendu</th>
-                        <th style={{ textAlign: 'center' }}>Déjà Ret.</th>
-                        <th style={{ textAlign: 'center' }}>Dispo Ret.</th>
-                        <th style={{ textAlign: 'right' }}>Prix Unit.</th>
-                        <th style={{ textAlign: 'center', width: '110px' }}>Qté à Retourner</th>
-                        <th style={{ textAlign: 'center' }}>Remettre en Stock ?</th>
-                        <th style={{ textAlign: 'right' }}>Sous-total</th>
+                        <th style={{ textAlign: 'left', minWidth: '220px' }}>Article & Code-barres</th>
+                        <th style={{ textAlign: 'center', width: '80px' }}>Vendu</th>
+                        <th style={{ textAlign: 'center', width: '90px' }}>Déjà Ret.</th>
+                        <th style={{ textAlign: 'center', width: '100px' }}>Dispo Ret.</th>
+                        <th style={{ textAlign: 'right', width: '105px' }}>Prix Unitaire</th>
+                        <th style={{ textAlign: 'center', width: '145px' }}>Qté à Retourner</th>
+                        <th style={{ textAlign: 'center', width: '135px' }}>Remise en Stock</th>
+                        <th style={{ textAlign: 'right', width: '125px' }}>Remboursement</th>
                       </tr>
                     </thead>
                     <tbody>
                       {returnItemsState.map((item) => {
                         const isDepleted = item.max_qty <= 0;
                         return (
-                          <tr key={item.transaction_item_id} style={{ opacity: isDepleted ? 0.5 : 1 }}>
-                            <td>
-                              <div style={{ fontWeight: '600' }}>{item.product_name}</div>
-                              <div style={{ fontSize: '11px', color: '#6b7280' }}>Code: {item.barcode}</div>
+                          <tr key={item.transaction_item_id} style={{ 
+                            ...styles.modalTr,
+                            opacity: isDepleted ? 0.45 : 1,
+                            backgroundColor: item.return_qty > 0 ? '#fff5f5' : 'transparent',
+                          }}>
+                            <td style={styles.modalTd}>
+                              <div style={styles.productName}>{item.product_name}</div>
+                              <span style={styles.productBarcode}>Code: {item.barcode}</span>
                             </td>
-                            <td style={{ textAlign: 'center' }}>{item.quantity_sold}</td>
-                            <td style={{ textAlign: 'center', color: item.returned_so_far > 0 ? '#d97706' : '#6b7280' }}>
-                              {item.returned_so_far}
+                            <td style={{ ...styles.modalTd, textAlign: 'center', fontWeight: '700', fontSize: '14px', color: '#334155' }}>
+                              {item.quantity_sold}
                             </td>
-                            <td style={{ textAlign: 'center', fontWeight: '700', color: isDepleted ? '#9ca3af' : '#059669' }}>
-                              {item.max_qty}
+                            <td style={{ ...styles.modalTd, textAlign: 'center' }}>
+                              {item.returned_so_far > 0 ? (
+                                <span style={styles.amberPill}>{item.returned_so_far}</span>
+                              ) : (
+                                <span style={{ color: '#94a3b8', fontSize: '13px' }}>0</span>
+                              )}
                             </td>
-                            <td style={{ textAlign: 'right' }}>
+                            <td style={{ ...styles.modalTd, textAlign: 'center' }}>
+                              {item.max_qty > 0 ? (
+                                <span style={styles.greenPill}>{item.max_qty}</span>
+                              ) : (
+                                <span style={styles.depletedPill}>Épuisé</span>
+                              )}
+                            </td>
+                            <td style={{ ...styles.modalTd, textAlign: 'right', fontWeight: '600', fontSize: '14px', color: '#1e293b' }}>
                               {item.unit_price.toFixed(2)} MAD
                             </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <input
-                                type="number"
-                                min="0"
-                                max={item.max_qty}
-                                disabled={isDepleted}
-                                value={item.return_qty}
-                                onChange={(e) => handleItemQtyChange(item.transaction_item_id, e.target.value)}
-                                style={styles.qtyInput}
-                              />
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <label style={styles.restockCheckboxLabel}>
+                            <td style={{ ...styles.modalTd, textAlign: 'center' }}>
+                              <div style={styles.stepperWrapper}>
+                                <button
+                                  type="button"
+                                  disabled={isDepleted || item.return_qty <= 0}
+                                  onClick={() => handleItemQtyChange(item.transaction_item_id, item.return_qty - 1)}
+                                  style={{
+                                    ...styles.stepperBtn,
+                                    cursor: (isDepleted || item.return_qty <= 0) ? 'not-allowed' : 'pointer',
+                                    opacity: (isDepleted || item.return_qty <= 0) ? 0.35 : 1,
+                                  }}
+                                  title="Diminuer la quantité"
+                                >
+                                  -
+                                </button>
                                 <input
-                                  type="checkbox"
-                                  disabled={isDepleted || item.return_qty === 0}
-                                  checked={item.restocked}
-                                  onChange={() => handleItemRestockedToggle(item.transaction_item_id)}
+                                  type="number"
+                                  min="0"
+                                  max={item.max_qty}
+                                  disabled={isDepleted}
+                                  value={item.return_qty}
+                                  onChange={(e) => handleItemQtyChange(item.transaction_item_id, e.target.value)}
+                                  style={styles.stepperInput}
                                 />
-                                <span style={{ fontSize: '12px', marginLeft: '4px' }}>Oui</span>
-                              </label>
+                                <button
+                                  type="button"
+                                  disabled={isDepleted || item.return_qty >= item.max_qty}
+                                  onClick={() => handleItemQtyChange(item.transaction_item_id, item.return_qty + 1)}
+                                  style={{
+                                    ...styles.stepperBtn,
+                                    cursor: (isDepleted || item.return_qty >= item.max_qty) ? 'not-allowed' : 'pointer',
+                                    opacity: (isDepleted || item.return_qty >= item.max_qty) ? 0.35 : 1,
+                                  }}
+                                  title="Augmenter la quantité"
+                                >
+                                  +
+                                </button>
+                              </div>
                             </td>
-                            <td style={{ textAlign: 'right', fontWeight: '700', color: item.return_qty > 0 ? '#dc2626' : '#9ca3af' }}>
+                            <td style={{ ...styles.modalTd, textAlign: 'center' }}>
+                              <button
+                                type="button"
+                                disabled={isDepleted || item.return_qty === 0}
+                                onClick={() => handleItemRestockedToggle(item.transaction_item_id)}
+                                style={{
+                                  ...styles.restockToggleBtn,
+                                  opacity: (isDepleted || item.return_qty === 0) ? 0.4 : 1,
+                                  cursor: (isDepleted || item.return_qty === 0) ? 'not-allowed' : 'pointer',
+                                  backgroundColor: item.restocked ? '#f0fdf4' : '#fef2f2',
+                                  color: item.restocked ? '#166534' : '#991b1b',
+                                  borderColor: item.restocked ? '#bbf7d0' : '#fecaca',
+                                }}
+                                title={item.restocked ? "L'article sera réintégré au stock" : "L'article est défectueux et ne sera pas remis en rayon"}
+                              >
+                                {item.restocked ? <Check size={13} style={{ marginRight: '4px' }} /> : <AlertCircle size={13} style={{ marginRight: '4px' }} />}
+                                <span>{item.restocked ? 'En Stock' : 'Défectueux'}</span>
+                              </button>
+                            </td>
+                            <td style={{ ...styles.modalTd, textAlign: 'right', fontWeight: '800', fontSize: '15px', color: item.return_qty > 0 ? '#dc2626' : '#94a3b8' }}>
                               {(item.return_qty * item.unit_price).toFixed(2)} MAD
                             </td>
                           </tr>
@@ -633,7 +678,7 @@ export default function ReturnsPage() {
         isOpen={isDetailsOpen}
         onClose={() => setIsDetailsOpen(false)}
         title={`Détails du Bon de Retour #RET-${selectedReturn?.id}`}
-        maxWidth="650px"
+        maxWidth="750px"
       >
         {selectedReturn && (
           <div style={styles.detailsContainer}>
@@ -702,13 +747,15 @@ export default function ReturnsPage() {
               </strong>
             </div>
 
-            <button
-              onClick={() => handlePrintReturnReceipt(selectedReturn.id)}
-              style={styles.modalPrintBtn}
-            >
-              <Printer size={16} style={{ marginRight: '6px' }} />
-              <span>Imprimer le Bon de Remboursement</span>
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button
+                type="button"
+                onClick={() => setIsDetailsOpen(false)}
+                style={styles.modalCloseBtn}
+              >
+                Fermer
+              </button>
+            </div>
           </div>
         )}
       </Modal>
@@ -902,18 +949,6 @@ const styles = {
     borderRadius: '4px',
     fontSize: '12px',
   },
-  printActionBtn: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    padding: '6px 10px',
-    backgroundColor: '#fef2f2',
-    color: '#dc2626',
-    border: '1px solid #fecaca',
-    borderRadius: '6px',
-    fontSize: '12px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
   detailsActionBtn: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -965,41 +1000,43 @@ const styles = {
 
   /* Form modal styles */
   searchTxBox: {
-    backgroundColor: '#f9fafb',
-    padding: '16px',
+    backgroundColor: '#f8fafc',
+    padding: '18px 20px',
     borderRadius: '8px',
-    border: '1px solid #e5e7eb',
+    border: '1px solid #e2e8f0',
   },
   label: {
     display: 'block',
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: '6px',
+    fontSize: '13.5px',
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: '8px',
   },
   searchTxRow: {
     display: 'flex',
-    gap: '8px',
+    gap: '10px',
   },
   searchTxInput: {
     flex: 1,
-    padding: '10px 12px',
+    padding: '11px 14px',
     borderRadius: '6px',
-    border: '1px solid #d1d5db',
-    fontSize: '14px',
+    border: '1px solid #cbd5e1',
+    fontSize: '15px',
     outline: 'none',
+    boxSizing: 'border-box',
   },
   searchTxBtn: {
     display: 'inline-flex',
     alignItems: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: '#0f172a',
     color: '#ffffff',
-    padding: '0 16px',
+    padding: '0 20px',
     borderRadius: '6px',
     border: 'none',
-    fontSize: '13px',
-    fontWeight: '600',
+    fontSize: '14px',
+    fontWeight: '700',
     cursor: 'pointer',
+    transition: 'background-color 0.15s ease',
   },
   errorAlert: {
     display: 'flex',
@@ -1007,80 +1044,189 @@ const styles = {
     backgroundColor: '#fef2f2',
     color: '#dc2626',
     border: '1px solid #fecaca',
-    padding: '10px 14px',
-    borderRadius: '6px',
-    marginTop: '12px',
-    fontSize: '13px',
-  },
-  txInfoCard: {
-    backgroundColor: '#f8fafc',
     padding: '12px 16px',
     borderRadius: '6px',
+    marginTop: '12px',
+    fontSize: '13.5px',
+    fontWeight: '500',
+  },
+  txInfoCard: {
+    backgroundColor: '#ffffff',
+    padding: '16px',
+    borderRadius: '8px',
     border: '1px solid #e2e8f0',
-    marginBottom: '16px',
+    marginBottom: '18px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
   },
-  txInfoRow: {
+  txInfoGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '12px',
+  },
+  txTile: {
+    backgroundColor: '#f8fafc',
+    padding: '12px 14px',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
     display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '13px',
-    flexWrap: 'wrap',
-    gap: '8px',
+    flexDirection: 'column',
+    gap: '4px',
   },
-  txInfoLabel: {
+  txTileLabel: {
+    fontSize: '11px',
+    fontWeight: '700',
     color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  txTileValue: {
+    fontSize: '16px',
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  txTileText: {
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#334155',
   },
   sectionTitle: {
-    fontSize: '14px',
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: '8px',
+    fontSize: '14.5px',
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: '10px',
+    letterSpacing: '-0.2px',
   },
   itemsTableWrapper: {
-    maxHeight: '260px',
+    maxHeight: '340px',
     overflowY: 'auto',
-    border: '1px solid #e5e7eb',
-    borderRadius: '6px',
-    marginBottom: '16px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '8px',
+    marginBottom: '18px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
   },
   itemsTable: {
     width: '100%',
     borderCollapse: 'collapse',
-    fontSize: '12px',
-  },
-  qtyInput: {
-    width: '60px',
-    textAlign: 'center',
-    padding: '6px',
-    borderRadius: '4px',
-    border: '1px solid #d1d5db',
     fontSize: '13px',
-    fontWeight: '700',
   },
-  restockCheckboxLabel: {
+  modalTr: {
+    borderBottom: '1px solid #f1f5f9',
+    transition: 'background-color 0.15s ease',
+  },
+  modalTd: {
+    padding: '12px 14px',
+    verticalAlign: 'middle',
+  },
+  productName: {
+    fontSize: '14px',
+    fontWeight: '700',
+    color: '#0f172a',
+    lineHeight: '1.3',
+  },
+  productBarcode: {
+    fontSize: '11.5px',
+    color: '#64748b',
+    fontFamily: 'monospace',
+    display: 'inline-block',
+    backgroundColor: '#f1f5f9',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    marginTop: '3px',
+  },
+  amberPill: {
+    backgroundColor: '#fef3c7',
+    color: '#b45309',
+    padding: '3px 8px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: '700',
+    display: 'inline-block',
+  },
+  greenPill: {
+    backgroundColor: '#dcfce7',
+    color: '#15803d',
+    padding: '4px 12px',
+    borderRadius: '12px',
+    fontSize: '13px',
+    fontWeight: '800',
+    display: 'inline-block',
+  },
+  depletedPill: {
+    backgroundColor: '#f1f5f9',
+    color: '#94a3b8',
+    padding: '3px 8px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: '600',
+    display: 'inline-block',
+  },
+  stepperWrapper: {
     display: 'inline-flex',
     alignItems: 'center',
-    cursor: 'pointer',
+    border: '1px solid #cbd5e1',
+    borderRadius: '6px',
+    overflow: 'hidden',
+    backgroundColor: '#ffffff',
+  },
+  stepperBtn: {
+    width: '32px',
+    height: '34px',
+    border: 'none',
+    background: '#f8fafc',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '16px',
+    fontWeight: '700',
+    color: '#334155',
+    userSelect: 'none',
+  },
+  stepperInput: {
+    width: '48px',
+    height: '34px',
+    border: 'none',
+    borderLeft: '1px solid #e2e8f0',
+    borderRight: '1px solid #e2e8f0',
+    textAlign: 'center',
+    fontSize: '14.5px',
+    fontWeight: '800',
+    outline: 'none',
+    boxSizing: 'border-box',
+    color: '#0f172a',
+  },
+  restockToggleBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '6px 12px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: '700',
+    border: '1px solid',
+    whiteSpace: 'nowrap',
+    transition: 'all 0.15s ease',
   },
   formGrid: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    gap: '12px',
-    marginBottom: '16px',
+    gap: '14px',
+    marginBottom: '18px',
   },
   select: {
     width: '100%',
-    padding: '8px 10px',
+    padding: '10px 12px',
     borderRadius: '6px',
-    border: '1px solid #d1d5db',
-    fontSize: '13px',
+    border: '1px solid #cbd5e1',
+    fontSize: '13.5px',
     outline: 'none',
+    backgroundColor: '#ffffff',
   },
   input: {
     width: '100%',
-    padding: '8px 10px',
+    padding: '10px 12px',
     borderRadius: '6px',
-    border: '1px solid #d1d5db',
-    fontSize: '13px',
+    border: '1px solid #cbd5e1',
+    fontSize: '13.5px',
     boxSizing: 'border-box',
     outline: 'none',
   },
@@ -1088,151 +1234,149 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '16px',
+    padding: '18px 22px',
     backgroundColor: '#fef2f2',
     borderRadius: '8px',
     border: '1px solid #fecaca',
     flexWrap: 'wrap',
-    gap: '12px',
+    gap: '14px',
   },
   totalRefundText: {
-    fontSize: '13px',
+    fontSize: '14px',
     fontWeight: '700',
     color: '#991b1b',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '10px',
   },
   totalRefundAmount: {
-    fontSize: '18px',
+    fontSize: '24px',
+    fontWeight: '900',
     color: '#dc2626',
   },
   cancelBtn: {
-    padding: '9px 16px',
+    padding: '11px 20px',
     backgroundColor: '#ffffff',
-    border: '1px solid #d1d5db',
+    border: '1px solid #cbd5e1',
     borderRadius: '6px',
-    fontSize: '13px',
+    fontSize: '13.5px',
     fontWeight: '600',
-    color: '#4b5563',
+    color: '#475569',
     cursor: 'pointer',
   },
   submitReturnBtn: {
-    padding: '9px 18px',
+    padding: '11px 24px',
     backgroundColor: '#dc2626',
     border: 'none',
     borderRadius: '6px',
-    fontSize: '13px',
+    fontSize: '14px',
     fontWeight: '700',
     color: '#ffffff',
     cursor: 'pointer',
+    transition: 'background-color 0.15s ease',
   },
 
   /* Success screen */
   successContainer: {
-    padding: '30px 16px',
+    padding: '36px 20px',
     textAlign: 'center',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
   },
   successTitle: {
-    fontSize: '18px',
+    fontSize: '20px',
     fontWeight: '800',
-    color: '#111827',
+    color: '#0f172a',
     margin: 0,
   },
   successSub: {
-    fontSize: '14px',
-    color: '#4b5563',
-    marginTop: '8px',
-    maxWidth: '480px',
+    fontSize: '14.5px',
+    color: '#475569',
+    marginTop: '10px',
+    maxWidth: '520px',
     lineHeight: '1.5',
   },
   successActions: {
     display: 'flex',
     gap: '12px',
-    marginTop: '24px',
+    marginTop: '26px',
   },
-  successPrintBtn: {
+  successNewBtn: {
     display: 'inline-flex',
     alignItems: 'center',
     backgroundColor: '#dc2626',
     color: '#ffffff',
-    padding: '10px 18px',
+    padding: '10px 22px',
     borderRadius: '6px',
     border: 'none',
     fontWeight: '700',
-    fontSize: '13px',
+    fontSize: '14px',
     cursor: 'pointer',
   },
   successCloseBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#f3f4f6',
-    color: '#374151',
+    padding: '10px 22px',
+    backgroundColor: '#f1f5f9',
+    color: '#334155',
     borderRadius: '6px',
-    border: '1px solid #d1d5db',
+    border: '1px solid #cbd5e1',
     fontWeight: '600',
-    fontSize: '13px',
+    fontSize: '14px',
     cursor: 'pointer',
   },
 
   /* Details modal styles */
   detailsContainer: {
-    padding: '8px 0',
+    padding: '4px 0',
   },
   detailsMetaGrid: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    gap: '10px',
-    backgroundColor: '#f9fafb',
-    padding: '12px 16px',
-    borderRadius: '6px',
-    border: '1px solid #e5e7eb',
-    fontSize: '13px',
+    gap: '12px',
+    backgroundColor: '#f8fafc',
+    padding: '14px 18px',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
+    fontSize: '13.5px',
   },
   metaLabel: {
-    color: '#6b7280',
-    marginRight: '4px',
+    color: '#64748b',
+    marginRight: '6px',
   },
   notesBox: {
-    marginTop: '10px',
-    padding: '10px 14px',
+    marginTop: '12px',
+    padding: '12px 16px',
     backgroundColor: '#fffbeb',
     border: '1px solid #fef3c7',
     borderRadius: '6px',
-    fontSize: '12px',
+    fontSize: '13px',
     color: '#92400e',
   },
   detailsTable: {
     width: '100%',
     borderCollapse: 'collapse',
-    fontSize: '12px',
+    fontSize: '13px',
     marginBottom: '16px',
   },
   detailsTotalRow: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '12px 16px',
+    padding: '14px 18px',
     backgroundColor: '#fef2f2',
     border: '1px solid #fecaca',
-    borderRadius: '6px',
+    borderRadius: '8px',
     fontWeight: '700',
-    fontSize: '13px',
+    fontSize: '14px',
     marginBottom: '16px',
   },
-  modalPrintBtn: {
-    width: '100%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '10px',
-    backgroundColor: '#dc2626',
-    color: '#ffffff',
+  modalCloseBtn: {
+    padding: '10px 24px',
+    backgroundColor: '#f1f5f9',
+    color: '#334155',
     borderRadius: '6px',
-    border: 'none',
-    fontWeight: '700',
+    border: '1px solid #cbd5e1',
+    fontWeight: '600',
     fontSize: '14px',
     cursor: 'pointer',
   },
