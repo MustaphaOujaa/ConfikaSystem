@@ -136,11 +136,27 @@ export default function DashboardPage() {
             </div>
 
             <div style={styles.dailyItem}>
-              <div style={styles.dailyLabel}>Chiffre d'Affaires du {selectedDate}</div>
+              <div style={styles.dailyLabel}>Chiffre d'Affaires Net ({selectedDate})</div>
               <div style={styles.dailyVal('#16a34a')}>
                 {loadingDaily ? '...' : `${Number(dailyReport?.total_sales_revenue || 0).toFixed(2)} MAD`}
               </div>
-              <div style={styles.dailySub}>Revenu brut des ventes enregistrées</div>
+              <div style={styles.dailySub}>
+                {dailyReport?.total_refunds_today > 0 ? (
+                  <span>Brut: {Number(dailyReport?.gross_sales_revenue || 0).toFixed(2)} MAD</span>
+                ) : (
+                  <span>Revenu brut des ventes enregistrées</span>
+                )}
+              </div>
+            </div>
+
+            <div style={styles.dailyItem}>
+              <div style={styles.dailyLabel}>Retours & Remboursements</div>
+              <div style={styles.dailyVal(dailyReport?.total_refunds_today > 0 ? '#dc2626' : '#6b7280')}>
+                {loadingDaily ? '...' : `${dailyReport?.total_refunds_today > 0 ? '-' : ''}${Number(dailyReport?.total_refunds_today || 0).toFixed(2)} MAD`}
+              </div>
+              <div style={styles.dailySub}>
+                {dailyReport?.returns_count || 0} retour{(dailyReport?.returns_count || 0) > 1 ? 's' : ''} enregistré{(dailyReport?.returns_count || 0) > 1 ? 's' : ''}
+              </div>
             </div>
 
             <div style={styles.dailyItem}>
@@ -148,7 +164,7 @@ export default function DashboardPage() {
               <div style={styles.dailyVal('#dc2626')}>
                 {loadingDaily ? '...' : `+ ${Number(dailyReport?.net_profit_today || 0).toFixed(2)} MAD`}
               </div>
-              <div style={styles.dailySub}>Ventes moins Coût des Marchandises</div>
+              <div style={styles.dailySub}>Ventes nettes moins Coût Marchandises</div>
             </div>
           </div>
 

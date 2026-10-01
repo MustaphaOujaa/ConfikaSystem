@@ -11,7 +11,8 @@ import {
   AlertTriangle,
   X,
   ShieldCheck,
-  Users
+  Users,
+  RotateCcw
 } from 'lucide-react';
 import { logout, selectCurrentUser } from '../../store/authSlice';
 import { useGetLowStockAlertsQuery } from '../../api/apiSlice';
@@ -42,6 +43,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
     { label: 'Gestion des Produits', path: '/products', icon: Package },
     { label: 'Catégories & Marques', path: '/categories', icon: Tags },
     { label: 'Historique des Ventes', path: '/transactions', icon: Receipt },
+    { label: 'Gestion des Retours', path: '/returns', icon: RotateCcw },
     ...(isAdmin ? [{ label: 'Sécurité & Accès', path: '/security', icon: ShieldCheck }] : []),
   ];
 

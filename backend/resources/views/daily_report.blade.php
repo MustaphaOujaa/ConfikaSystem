@@ -338,9 +338,16 @@
             </div>
 
             <div class="kpi-card kpi-card-revenue">
-                <div class="kpi-label">Chiffre d'Affaires</div>
+                <div class="kpi-label">Chiffre d'Affaires Net</div>
                 <div class="kpi-val">{{ number_format($total_sales_revenue, 2) }} {{ $currency }}</div>
             </div>
+
+            @if(($total_refunds_today ?? 0) > 0)
+            <div class="kpi-card" style="border-left: 4px solid #dc2626;">
+                <div class="kpi-label">Retours & Remb.</div>
+                <div class="kpi-val" style="color: #dc2626;">-{{ number_format($total_refunds_today, 2) }} {{ $currency }}</div>
+            </div>
+            @endif
 
             <div class="kpi-card kpi-card-profit">
                 <div class="kpi-label">Bénéfice Net (Gain)</div>
@@ -400,6 +407,39 @@
             </tfoot>
             @endif
         </table>
+
+        @if(!empty($returns_summary))
+        <!-- Daily Returns Breakdown -->
+        <div class="section-title" style="color: #dc2626; border-top: 1px dashed #d1d5db; padding-top: 14px; margin-top: 20px;">
+            <span>Retours Enregistrés Aujourd'hui ({{ count($returns_summary) }})</span>
+            <span class="section-count" style="color: #dc2626; font-weight: bold;">Remboursements : -{{ number_format($total_refunds_today, 2) }} {{ $currency }}</span>
+        </div>
+
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th class="col-index">#</th>
+                    <th>N° Retour</th>
+                    <th>Vente d'Origine</th>
+                    <th>Heure</th>
+                    <th>Motif</th>
+                    <th style="text-align: right;">Montant Remboursé</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($returns_summary as $idx => $ret)
+                <tr>
+                    <td class="col-index">{{ $idx + 1 }}</td>
+                    <td style="font-weight: bold; color: #111827;">#RET-{{ $ret['id'] }}</td>
+                    <td>#TX-{{ $ret['transaction_id'] }}</td>
+                    <td>{{ $ret['time'] }}</td>
+                    <td>{{ $ret['reason'] ?? 'Retour standard' }}</td>
+                    <td style="text-align: right; font-weight: bold; color: #dc2626;">-{{ number_format($ret['refund_amount'], 2) }} {{ $currency }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+        @endif
 
         <!-- Signatures & Verification -->
         <div class="report-footer">

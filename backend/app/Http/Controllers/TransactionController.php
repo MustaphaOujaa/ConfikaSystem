@@ -14,7 +14,7 @@ class TransactionController extends Controller
 
     public function index()
     {
-        return response()->json(Transaction::with(['items.product', 'items.stock'])->latest()->paginate(15));
+        return response()->json(Transaction::with(['items.product', 'items.stock', 'returns.items'])->latest()->paginate(15));
     }
 
     public function store(Request $request)
