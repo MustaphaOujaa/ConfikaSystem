@@ -12,6 +12,7 @@ import TransactionsPage from './pages/TransactionsPage';
 import ReturnsPage from './pages/ReturnsPage';
 import CashiersPage from './pages/CashiersPage';
 import SecurityPage from './pages/SecurityPage';
+import ReparationsPage from './pages/ReparationsPage';
 
 export default function App() {
   const user = useSelector(selectCurrentUser);
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="pos" element={<PosPage />} />
         <Route path="transactions" element={<TransactionsPage />} />
         <Route path="returns" element={<ReturnsPage />} />
+        <Route path="reparations" element={<ReparationsPage />} />
         <Route 
           path="cashiers" 
           element={isAdmin ? <CashiersPage /> : <Navigate to="/pos" replace />} 

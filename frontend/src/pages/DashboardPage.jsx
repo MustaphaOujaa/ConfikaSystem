@@ -13,7 +13,8 @@ import {
   Search,
   ShoppingBag,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Wrench
 } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { 
@@ -34,6 +35,7 @@ export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [soldSearch, setSoldSearch] = useState('');
   const [showSoldTable, setShowSoldTable] = useState(true);
+  const [showReparationsTable, setShowReparationsTable] = useState(true);
 
   const { data: productsData, isLoading: loadingProducts } = useGetProductsQuery({ page: 1 });
   const { data: lowStockData, isLoading: loadingLowStock } = useGetLowStockAlertsQuery();
@@ -270,6 +272,123 @@ export default function DashboardPage() {
                 </div>
               )
             )}
+          </div>
+
+          {/* Detailed Reparations Section for the selected date */}
+          <div style={{ ...styles.soldSection, marginTop: '20px' }}>
+            <div style={styles.soldSectionHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Wrench size={18} style={{ color: '#0284c7' }} />
+                <span style={styles.soldSectionTitle}>
+                  Atelier Réparations du {selectedDate} ({dailyReport?.reparations?.count || 0} opération{(dailyReport?.reparations?.count || 0) > 1 ? 's' : ''})
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowReparationsTable(!showReparationsTable)}
+                  style={styles.toggleTableBtn}
+                  title={showReparationsTable ? "Masquer le tableau" : "Afficher le tableau"}
+                >
+                  {showReparationsTable ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Reparations KPI grid for this day */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', padding: '12px 16px', backgroundColor: '#f0f9ff', borderBottom: '1px solid #e0f2fe' }}>
+              <div>
+                <div style={{ fontSize: '11px', color: '#0369a1', fontWeight: '700' }}>Recettes Réparations</div>
+                <div style={{ fontSize: '16px', fontWeight: '800', color: '#0284c7' }}>
+                  {Number(dailyReport?.reparations?.revenue || 0).toFixed(2)} MAD
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '11px', color: '#b91c1c', fontWeight: '700' }}>Coût des Pièces</div>
+                <div style={{ fontSize: '16px', fontWeight: '800', color: '#dc2626' }}>
+                  {Number(dailyReport?.reparations?.cost || 0).toFixed(2)} MAD
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '11px', color: '#15803d', fontWeight: '700' }}>Bénéfice Net Réparations</div>
+                <div style={{ fontSize: '16px', fontWeight: '800', color: '#16a34a' }}>
+                  + {Number(dailyReport?.reparations?.profit || 0).toFixed(2)} MAD
+                </div>
+              </div>
+            </div>
+
+            {showReparationsTable && (
+              !dailyReport?.reparations?.items || dailyReport.reparations.items.length === 0 ? (
+                <div style={styles.emptySoldState}>
+                  Aucune opération de réparation enregistrée pour la date du {selectedDate}.
+                </div>
+              ) : (
+                <div style={styles.tableResponsive}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={styles.th}>N° Bon</th>
+                        <th style={styles.th}>Client</th>
+                        <th style={styles.th}>Appareil</th>
+                        <th style={styles.th}>Statut</th>
+                        <th style={{ ...styles.th, textAlign: 'right' }}>Tarif (MAD)</th>
+                        <th style={{ ...styles.th, textAlign: 'right' }}>Coût Pièces (MAD)</th>
+                        <th style={{ ...styles.th, textAlign: 'right' }}>Gain Net (MAD)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dailyReport.reparations.items.map((r) => (
+                        <tr key={r.id} style={styles.tr}>
+                          <td style={{ ...styles.td, fontWeight: '700', color: '#0284c7' }}>
+                            {r.ticket_number || `REP-${r.id}`}
+                          </td>
+                          <td style={styles.td}>
+                            <div style={{ fontWeight: '600' }}>{r.client_name}</div>
+                            <div style={{ fontSize: '11px', color: '#6b7280' }}>{r.client_phone}</div>
+                          </td>
+                          <td style={styles.td}>{r.device || '—'}</td>
+                          <td style={styles.td}>
+                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', backgroundColor: r.status === 'livre' ? '#dcfce7' : '#fef3c7', color: r.status === 'livre' ? '#15803d' : '#b45309', fontWeight: '600' }}>
+                              {r.status}
+                            </span>
+                          </td>
+                          <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700' }}>
+                            {Number(r.total_price || 0).toFixed(2)}
+                          </td>
+                          <td style={{ ...styles.td, textAlign: 'right', color: '#dc2626' }}>
+                            {Number(r.cout_pieces || 0).toFixed(2)}
+                          </td>
+                          <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700', color: '#16a34a' }}>
+                            + {Number(r.gain || 0).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            )}
+          </div>
+
+          {/* Consolidated Daily Total Summary Bar */}
+          <div style={{ marginTop: '20px', padding: '16px 20px', backgroundColor: '#1e293b', borderRadius: '8px', color: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+            <div>
+              <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '700' }}>
+                Bilan Consolidé de la Journée ({selectedDate})
+              </div>
+              <div style={{ fontSize: '13px', color: '#cbd5e1', marginTop: '4px' }}>
+                Ventes Magasin : <strong style={{ color: '#ffffff' }}>+{Number(dailyReport?.sales_profit_today ?? dailyReport?.net_profit_today ?? 0).toFixed(2)} MAD</strong>
+                {'  '}•{'  '}
+                Atelier Réparations : <strong style={{ color: '#38bdf8' }}>+{Number(dailyReport?.reparations?.profit || 0).toFixed(2)} MAD</strong>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>Bénéfice Net Total (Ventes + Réparations)</div>
+              <div style={{ fontSize: '22px', fontWeight: '900', color: '#4ade80' }}>
+                + {Number(dailyReport?.combined_summary?.grand_total_profit ?? dailyReport?.net_profit_today ?? 0).toFixed(2)} MAD
+              </div>
+            </div>
           </div>
         </div>
       )}

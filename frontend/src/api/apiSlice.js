@@ -13,7 +13,7 @@ export const apiSlice = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Product', 'Category', 'Brand', 'Transaction', 'Return', 'LowStock', 'DailyReport', 'Cashier'],
+  tagTypes: ['Product', 'Category', 'Brand', 'Transaction', 'Return', 'LowStock', 'DailyReport', 'Cashier', 'Reparation', 'ReparationInventoryPart'],
   endpoints: (builder) => ({
     // Auth
     login: builder.mutation({
@@ -335,6 +335,100 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ['Return', 'Transaction', { type: 'Product', id: 'LIST' }, 'LowStock', 'DailyReport'],
     }),
+
+    // Reparations
+    getReparations: builder.query({
+      query: (params = {}) => {
+        const cleanParams = Object.fromEntries(
+          Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+        );
+        const queryParams = new URLSearchParams(cleanParams).toString();
+        return `/reparations${queryParams ? `?${queryParams}` : ''}`;
+      },
+      providesTags: ['Reparation'],
+    }),
+    getReparationById: builder.query({
+      query: (id) => `/reparations/${id}`,
+      providesTags: (result, error, id) => [{ type: 'Reparation', id }],
+    }),
+    getReparationStats: builder.query({
+      query: () => '/reparations/stats',
+      providesTags: ['Reparation'],
+    }),
+    createReparation: builder.mutation({
+      query: (data) => ({
+        url: '/reparations',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Reparation', 'ReparationInventoryPart', 'DailyReport', { type: 'Product', id: 'LIST' }],
+    }),
+    updateReparation: builder.mutation({
+      query: ({ id, ...data }) => ({
+        url: `/reparations/${id}`,
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['Reparation', 'ReparationInventoryPart', 'DailyReport', { type: 'Product', id: 'LIST' }],
+    }),
+    updateReparationStatus: builder.mutation({
+      query: ({ id, ...data }) => ({
+        url: `/reparations/${id}/status`,
+        method: 'PATCH',
+        body: data,
+      }),
+      invalidatesTags: ['Reparation', 'ReparationInventoryPart', 'DailyReport'],
+    }),
+    deleteReparation: builder.mutation({
+      query: (id) => ({
+        url: `/reparations/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Reparation', 'ReparationInventoryPart', 'DailyReport'],
+    }),
+
+    // Workshop Spare Parts Inventory
+    getReparationInventoryParts: builder.query({
+      query: (params = {}) => {
+        const cleanParams = Object.fromEntries(
+          Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+        );
+        const queryParams = new URLSearchParams(cleanParams).toString();
+        return `/reparation-inventory-parts${queryParams ? `?${queryParams}` : ''}`;
+      },
+      providesTags: ['ReparationInventoryPart'],
+    }),
+    createReparationInventoryPart: builder.mutation({
+      query: (data) => ({
+        url: '/reparation-inventory-parts',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['ReparationInventoryPart', 'Reparation'],
+    }),
+    updateReparationInventoryPart: builder.mutation({
+      query: ({ id, ...data }) => ({
+        url: `/reparation-inventory-parts/${id}`,
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['ReparationInventoryPart', 'Reparation'],
+    }),
+    adjustReparationInventoryPartStock: builder.mutation({
+      query: ({ id, ...data }) => ({
+        url: `/reparation-inventory-parts/${id}/adjust-stock`,
+        method: 'PATCH',
+        body: data,
+      }),
+      invalidatesTags: ['ReparationInventoryPart', 'Reparation'],
+    }),
+    deleteReparationInventoryPart: builder.mutation({
+      query: (id) => ({
+        url: `/reparation-inventory-parts/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['ReparationInventoryPart', 'Reparation'],
+    }),
   }),
 });
 
@@ -381,4 +475,19 @@ export const {
   useLazyGetReturnsQuery,
   useLazyLookupReturnTransactionQuery,
   useCreateReturnMutation,
+  // Reparations hooks
+  useGetReparationsQuery,
+  useGetReparationByIdQuery,
+  useGetReparationStatsQuery,
+  useCreateReparationMutation,
+  useUpdateReparationMutation,
+  useUpdateReparationStatusMutation,
+  useDeleteReparationMutation,
+  // Workshop Spare Parts hooks
+  useGetReparationInventoryPartsQuery,
+  useLazyGetReparationInventoryPartsQuery,
+  useCreateReparationInventoryPartMutation,
+  useUpdateReparationInventoryPartMutation,
+  useAdjustReparationInventoryPartStockMutation,
+  useDeleteReparationInventoryPartMutation,
 } = apiSlice;
