@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Reparation;
 use App\Models\ReparationPart;
+use App\Models\ReparationInventoryPart;
 use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -142,6 +143,7 @@ class ReparationController extends Controller
             'parts.*.selling_price' => 'nullable|numeric|min:0',
             'parts.*.quantity' => 'nullable|integer|min:1',
             'parts.*.product_id' => 'nullable|exists:products,id',
+            'parts.*.inventory_part_id' => 'nullable|exists:reparation_inventory_parts,id',
         ]);
 
         return DB::transaction(function () use ($validated, $request) {
@@ -169,7 +171,7 @@ class ReparationController extends Controller
                     $costPrice = (float) ($pData['cost_price'] ?? 0);
                     $sellingPrice = (float) ($pData['selling_price'] ?? 0);
 
-                    // If linked to store product, we can decrement stock
+                    // If linked to store product, decrement store product stock
                     if (!empty($pData['product_id'])) {
                         $product = Product::find($pData['product_id']);
                         if ($product) {
@@ -180,8 +182,20 @@ class ReparationController extends Controller
                         }
                     }
 
+                    // If linked to dedicated workshop spare parts inventory, decrement workshop stock
+                    if (!empty($pData['inventory_part_id'])) {
+                        $invPart = ReparationInventoryPart::find($pData['inventory_part_id']);
+                        if ($invPart) {
+                            if ($costPrice == 0 && $invPart->cost_price) {
+                                $costPrice = (float) $invPart->cost_price;
+                            }
+                            $invPart->decrement('quantity', $qty);
+                        }
+                    }
+
                     $reparation->parts()->create([
                         'product_id' => $pData['product_id'] ?? null,
+                        'inventory_part_id' => $pData['inventory_part_id'] ?? null,
                         'name' => $pData['name'],
                         'quantity' => $qty,
                         'cost_price' => $costPrice,
@@ -259,6 +273,7 @@ class ReparationController extends Controller
             'parts.*.selling_price' => 'nullable|numeric|min:0',
             'parts.*.quantity' => 'nullable|integer|min:1',
             'parts.*.product_id' => 'nullable|exists:products,id',
+            'parts.*.inventory_part_id' => 'nullable|exists:reparation_inventory_parts,id',
         ]);
 
         return DB::transaction(function () use ($validated, $reparation, $isAdmin, $request) {
@@ -278,8 +293,17 @@ class ReparationController extends Controller
                     $costPrice = (float) ($pData['cost_price'] ?? 0);
                     $sellingPrice = (float) ($pData['selling_price'] ?? 0);
 
+                    // If inventory_part_id, pull cost price if 0
+                    if (!empty($pData['inventory_part_id'])) {
+                        $invPart = ReparationInventoryPart::find($pData['inventory_part_id']);
+                        if ($invPart && $costPrice == 0 && $invPart->cost_price) {
+                            $costPrice = (float) $invPart->cost_price;
+                        }
+                    }
+
                     $reparation->parts()->create([
                         'product_id' => $pData['product_id'] ?? null,
+                        'inventory_part_id' => $pData['inventory_part_id'] ?? null,
                         'name' => $pData['name'],
                         'quantity' => $qty,
                         'cost_price' => $costPrice,

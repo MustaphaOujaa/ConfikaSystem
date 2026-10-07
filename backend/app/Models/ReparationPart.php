@@ -12,6 +12,7 @@ class ReparationPart extends Model
     protected $fillable = [
         'reparation_id',
         'product_id',
+        'inventory_part_id',
         'name',
         'quantity',
         'cost_price',
@@ -32,5 +33,10 @@ class ReparationPart extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function inventoryPart()
+    {
+        return $this->belongsTo(ReparationInventoryPart::class, 'inventory_part_id');
     }
 }

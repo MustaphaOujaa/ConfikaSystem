@@ -29,11 +29,13 @@ import {
 import ReparationModal from '../components/reparations/ReparationModal';
 import PrintableBonReparation from '../components/reparations/PrintableBonReparation';
 import Pagination from '../components/common/Pagination';
+import ReparationInventoryView from '../components/reparations/ReparationInventoryView';
 
 export default function ReparationsPage() {
   const user = useSelector(selectCurrentUser);
   const isAdmin = user?.role === 'admin';
 
+  const [activeTab, setActiveTab] = useState('bons');
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -147,6 +149,32 @@ export default function ReparationsPage() {
           Nouveau Bon de Réparation
         </button>
       </div>
+
+      {/* Tab Switcher */}
+      <div style={styles.tabBar}>
+        <button
+          type="button"
+          onClick={() => setActiveTab('bons')}
+          style={{ ...styles.tabBtn, ...(activeTab === 'bons' ? styles.tabBtnActive : {}) }}
+        >
+          <Wrench size={15} style={{ marginRight: '6px' }} />
+          Bons de Réparation
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('stock')}
+          style={{ ...styles.tabBtn, ...(activeTab === 'stock' ? styles.tabBtnActive : {}) }}
+        >
+          <Package size={15} style={{ marginRight: '6px' }} />
+          Stock des Pièces Détachées
+        </button>
+      </div>
+
+      {/* Stock Tab */}
+      {activeTab === 'stock' && <ReparationInventoryView isAdmin={isAdmin} />}
+
+      {/* Bons Tab */}
+      {activeTab === 'bons' && (<>
 
       {/* KPI Stats Cards */}
       <div style={styles.statsGrid}>
@@ -524,6 +552,7 @@ export default function ReparationsPage() {
           onClose={() => setPrintingReparation(null)}
         />
       )}
+      </>)}
     </div>
   );
 }
@@ -532,6 +561,32 @@ const styles = {
   container: {
     maxWidth: '1300px',
     margin: '0 auto',
+  },
+  tabBar: {
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '20px',
+    borderBottom: '2px solid #e5e7eb',
+    paddingBottom: '0',
+  },
+  tabBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '9px 18px',
+    fontSize: '14px',
+    fontWeight: '600',
+    border: 'none',
+    borderBottom: '2px solid transparent',
+    marginBottom: '-2px',
+    backgroundColor: 'transparent',
+    color: '#6b7280',
+    cursor: 'pointer',
+    borderRadius: '0',
+    transition: 'color 0.15s, border-color 0.15s',
+  },
+  tabBtnActive: {
+    color: '#0284c7',
+    borderBottomColor: '#0284c7',
   },
   topHeader: {
     display: 'flex',

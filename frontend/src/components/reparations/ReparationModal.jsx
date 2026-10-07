@@ -16,13 +16,13 @@ import {
 import { 
   useCreateReparationMutation, 
   useUpdateReparationMutation,
-  useLazyGetProductsQuery 
+  useLazyGetReparationInventoryPartsQuery 
 } from '../../api/apiSlice';
 
 export default function ReparationModal({ isOpen, onClose, initialData = null, isAdmin = false }) {
   const [createReparation, { isLoading: isCreating }] = useCreateReparationMutation();
   const [updateReparation, { isLoading: isUpdating }] = useUpdateReparationMutation();
-  const [fetchStockProducts, { data: stockSearchResults, isFetching: isSearchingStock }] = useLazyGetProductsQuery();
+  const [fetchWorkshopParts, { data: workshopPartsData, isFetching: isSearchingWorkshop }] = useLazyGetReparationInventoryPartsQuery();
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -85,6 +85,7 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
         date_prevue: initialData.date_prevue ? initialData.date_prevue.split('T')[0] : '',
         date_retrait: initialData.date_retrait ? initialData.date_retrait.split('T')[0] : '',
         parts: initialData.parts ? initialData.parts.map(p => ({
+          inventory_part_id: p.inventory_part_id || null,
           product_id: p.product_id || null,
           name: p.name || '',
           quantity: p.quantity || 1,
@@ -144,29 +145,30 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
     }));
   };
 
-  // Stock search handler
+  // Workshop inventory search handler
   const handleStockSearchChange = (e) => {
     const val = e.target.value;
     setStockSearch(val);
     if (val.trim().length >= 1) {
-      fetchStockProducts({ search: val.trim(), per_page: 8 });
+      fetchWorkshopParts({ search: val.trim(), per_page: 8 });
       setShowStockDropdown(true);
     } else {
       setShowStockDropdown(false);
     }
   };
 
-  const handleSelectStockProduct = (product) => {
+  const handleSelectStockProduct = (part) => {
     setFormData((prev) => ({
       ...prev,
       parts: [
         ...prev.parts,
         {
-          product_id: product.id,
-          name: product.name,
+          inventory_part_id: part.id,
+          product_id: null,
+          name: part.name,
           quantity: 1,
-          cost_price: parseFloat(product.cost_price || 0),
-          stock_available: product.quantity,
+          cost_price: parseFloat(part.cost_price || 0),
+          stock_available: part.quantity,
         },
       ],
     }));
@@ -180,7 +182,7 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
       ...prev,
       parts: [
         ...prev.parts,
-        { product_id: null, name: '', quantity: 1, cost_price: 0 },
+        { inventory_part_id: null, product_id: null, name: '', quantity: 1, cost_price: 0 },
       ],
     }));
   };
@@ -238,6 +240,7 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
       total_price: totalPriceNum,
       acompte: acompteNum,
       parts: formData.parts.map(p => ({
+        inventory_part_id: p.inventory_part_id || null,
         product_id: p.product_id || null,
         name: p.name,
         quantity: parseInt(p.quantity, 10) || 1,
@@ -257,7 +260,7 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
     }
   };
 
-  const stockProductsList = stockSearchResults?.data || [];
+  const stockProductsList = workshopPartsData?.paginated?.data || [];
 
   return (
     <div style={styles.backdrop}>
@@ -514,13 +517,13 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
               </div>
             </div>
 
-            {/* Quick Search & Select from Store Stock */}
+            {/* Quick Search & Select from Workshop Inventory */}
             <div ref={stockSearchRef} style={styles.stockSearchContainer}>
               <div style={styles.stockSearchInputWrapper}>
                 <Package size={15} color="#0284c7" style={{ marginRight: '6px', flexShrink: 0 }} />
                 <input
                   type="text"
-                  placeholder="Rechercher une pièce déjà en stock magasin (nom, modèle, code)..."
+                  placeholder="Rechercher une pièce en stock atelier (nom, marque, référence)..."
                   value={stockSearch}
                   onChange={handleStockSearchChange}
                   onFocus={() => {
@@ -528,7 +531,7 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
                   }}
                   style={styles.stockSearchInput}
                 />
-                {isSearchingStock && <span style={{ fontSize: '11px', color: '#6b7280' }}>Recherche...</span>}
+                {isSearchingWorkshop && <span style={{ fontSize: '11px', color: '#6b7280' }}>Recherche...</span>}
               </div>
 
               {/* Autocomplete Dropdown Results */}
@@ -536,22 +539,22 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
                 <div style={styles.stockDropdown}>
                   {stockProductsList.length === 0 ? (
                     <div style={styles.dropdownEmpty}>
-                      Aucun produit trouvé en magasin pour "{stockSearch}".
+                      Aucune pièce trouvée en stock atelier pour "{stockSearch}".
                     </div>
                   ) : (
-                    stockProductsList.map((product) => (
+                    stockProductsList.map((part) => (
                       <div
-                        key={product.id}
-                        onClick={() => handleSelectStockProduct(product)}
+                        key={part.id}
+                        onClick={() => handleSelectStockProduct(part)}
                         style={styles.dropdownItem}
                       >
                         <div>
                           <div style={{ fontWeight: '600', color: '#111827', fontSize: '13px' }}>
-                            {product.name}
+                            {part.name}
                           </div>
                           <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                            {product.brand?.name ? `${product.brand.name} • ` : ''}
-                            {product.category?.name ? `${product.category.name}` : ''}
+                            {part.brand ? `${part.brand} • ` : ''}
+                            {part.reference ? `Réf: ${part.reference}` : ''}
                           </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
@@ -559,14 +562,14 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
                             fontSize: '11px', 
                             padding: '2px 6px', 
                             borderRadius: '4px', 
-                            backgroundColor: (product.quantity || 0) > 0 ? '#dcfce7' : '#fee2e2',
-                            color: (product.quantity || 0) > 0 ? '#15803d' : '#b91c1c',
+                            backgroundColor: (part.quantity || 0) > 0 ? '#dcfce7' : '#fee2e2',
+                            color: (part.quantity || 0) > 0 ? '#15803d' : '#b91c1c',
                             fontWeight: '700'
                           }}>
-                            Stock: {product.quantity || 0}
+                            Stock: {part.quantity || 0}
                           </span>
                           <div style={{ fontSize: '11px', color: '#4b5563', marginTop: '2px' }}>
-                            Coût: <strong>{parseFloat(product.cost_price || 0).toFixed(2)} DH</strong>
+                            Coût: <strong>{parseFloat(part.cost_price || 0).toFixed(2)} DH</strong>
                           </div>
                         </div>
                       </div>

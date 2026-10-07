@@ -14,6 +14,7 @@ use App\Http\Controllers\AdminProfileController;
 use App\Http\Controllers\AdminCashierController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\ReparationController;
+use App\Http\Controllers\ReparationInventoryPartController;
 
 // Public Authentication & OTP Password Reset routes
 Route::post('/login', [AuthController::class, 'login']);
@@ -74,6 +75,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reparations/stats', [ReparationController::class, 'stats']);
     Route::patch('/reparations/{id}/status', [ReparationController::class, 'updateStatus']);
     Route::apiResource('reparations', ReparationController::class);
+
+    // Workshop Spare Parts Inventory routes
+    Route::patch('/reparation-inventory-parts/{id}/adjust-stock', [ReparationInventoryPartController::class, 'adjustStock']);
+    Route::apiResource('reparation-inventory-parts', ReparationInventoryPartController::class);
 
     // Scanner routes
     Route::get('/scanner/products/{barcode}', [ScannerController::class, 'product']);

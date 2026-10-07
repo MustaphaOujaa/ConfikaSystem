@@ -13,7 +13,7 @@ export const apiSlice = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Product', 'Category', 'Brand', 'Transaction', 'Return', 'LowStock', 'DailyReport', 'Cashier', 'Reparation'],
+  tagTypes: ['Product', 'Category', 'Brand', 'Transaction', 'Return', 'LowStock', 'DailyReport', 'Cashier', 'Reparation', 'ReparationInventoryPart'],
   endpoints: (builder) => ({
     // Auth
     login: builder.mutation({
@@ -383,6 +383,46 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ['Reparation', 'DailyReport'],
     }),
+
+    // Workshop Spare Parts Inventory
+    getReparationInventoryParts: builder.query({
+      query: (params = {}) => {
+        const queryParams = new URLSearchParams(params).toString();
+        return `/reparation-inventory-parts${queryParams ? `?${queryParams}` : ''}`;
+      },
+      providesTags: ['ReparationInventoryPart'],
+    }),
+    createReparationInventoryPart: builder.mutation({
+      query: (data) => ({
+        url: '/reparation-inventory-parts',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['ReparationInventoryPart'],
+    }),
+    updateReparationInventoryPart: builder.mutation({
+      query: ({ id, ...data }) => ({
+        url: `/reparation-inventory-parts/${id}`,
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['ReparationInventoryPart'],
+    }),
+    adjustReparationInventoryPartStock: builder.mutation({
+      query: ({ id, ...data }) => ({
+        url: `/reparation-inventory-parts/${id}/adjust-stock`,
+        method: 'PATCH',
+        body: data,
+      }),
+      invalidatesTags: ['ReparationInventoryPart'],
+    }),
+    deleteReparationInventoryPart: builder.mutation({
+      query: (id) => ({
+        url: `/reparation-inventory-parts/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['ReparationInventoryPart'],
+    }),
   }),
 });
 
@@ -437,4 +477,11 @@ export const {
   useUpdateReparationMutation,
   useUpdateReparationStatusMutation,
   useDeleteReparationMutation,
+  // Workshop Spare Parts hooks
+  useGetReparationInventoryPartsQuery,
+  useLazyGetReparationInventoryPartsQuery,
+  useCreateReparationInventoryPartMutation,
+  useUpdateReparationInventoryPartMutation,
+  useAdjustReparationInventoryPartStockMutation,
+  useDeleteReparationInventoryPartMutation,
 } = apiSlice;
