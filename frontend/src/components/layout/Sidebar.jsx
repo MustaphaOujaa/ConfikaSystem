@@ -12,7 +12,8 @@ import {
   X,
   ShieldCheck,
   Users,
-  RotateCcw
+  RotateCcw,
+  Wrench
 } from 'lucide-react';
 import { logout, selectCurrentUser } from '../../store/authSlice';
 import { useGetLowStockAlertsQuery } from '../../api/apiSlice';
@@ -40,6 +41,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
     ...(isAdmin ? [{ label: 'Tableau de bord', path: '/', icon: LayoutDashboard }] : []),
     ...(isAdmin ? [{ label: 'Gestion des Caissiers', path: '/cashiers', icon: Users }] : []),
     { label: 'Caisse / Vente (POS)', path: '/pos', icon: ShoppingCart },
+    { label: 'Atelier Réparations', path: '/reparations', icon: Wrench },
     { label: 'Gestion des Produits', path: '/products', icon: Package },
     { label: 'Catégories & Marques', path: '/categories', icon: Tags },
     { label: 'Historique des Ventes', path: '/transactions', icon: Receipt },

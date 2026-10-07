@@ -13,7 +13,7 @@ export const apiSlice = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Product', 'Category', 'Brand', 'Transaction', 'Return', 'LowStock', 'DailyReport', 'Cashier'],
+  tagTypes: ['Product', 'Category', 'Brand', 'Transaction', 'Return', 'LowStock', 'DailyReport', 'Cashier', 'Reparation'],
   endpoints: (builder) => ({
     // Auth
     login: builder.mutation({
@@ -335,6 +335,54 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ['Return', 'Transaction', { type: 'Product', id: 'LIST' }, 'LowStock', 'DailyReport'],
     }),
+
+    // Reparations
+    getReparations: builder.query({
+      query: (params = {}) => {
+        const queryParams = new URLSearchParams(params).toString();
+        return `/reparations${queryParams ? `?${queryParams}` : ''}`;
+      },
+      providesTags: ['Reparation'],
+    }),
+    getReparationById: builder.query({
+      query: (id) => `/reparations/${id}`,
+      providesTags: (result, error, id) => [{ type: 'Reparation', id }],
+    }),
+    getReparationStats: builder.query({
+      query: () => '/reparations/stats',
+      providesTags: ['Reparation'],
+    }),
+    createReparation: builder.mutation({
+      query: (data) => ({
+        url: '/reparations',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Reparation', 'DailyReport', { type: 'Product', id: 'LIST' }],
+    }),
+    updateReparation: builder.mutation({
+      query: ({ id, ...data }) => ({
+        url: `/reparations/${id}`,
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['Reparation', 'DailyReport', { type: 'Product', id: 'LIST' }],
+    }),
+    updateReparationStatus: builder.mutation({
+      query: ({ id, ...data }) => ({
+        url: `/reparations/${id}/status`,
+        method: 'PATCH',
+        body: data,
+      }),
+      invalidatesTags: ['Reparation', 'DailyReport'],
+    }),
+    deleteReparation: builder.mutation({
+      query: (id) => ({
+        url: `/reparations/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Reparation', 'DailyReport'],
+    }),
   }),
 });
 
@@ -381,4 +429,12 @@ export const {
   useLazyGetReturnsQuery,
   useLazyLookupReturnTransactionQuery,
   useCreateReturnMutation,
+  // Reparations hooks
+  useGetReparationsQuery,
+  useGetReparationByIdQuery,
+  useGetReparationStatsQuery,
+  useCreateReparationMutation,
+  useUpdateReparationMutation,
+  useUpdateReparationStatusMutation,
+  useDeleteReparationMutation,
 } = apiSlice;

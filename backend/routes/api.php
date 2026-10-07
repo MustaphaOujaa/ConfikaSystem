@@ -13,6 +13,7 @@ use App\Http\Controllers\BackupController;
 use App\Http\Controllers\AdminProfileController;
 use App\Http\Controllers\AdminCashierController;
 use App\Http\Controllers\ReturnController;
+use App\Http\Controllers\ReparationController;
 
 // Public Authentication & OTP Password Reset routes
 Route::post('/login', [AuthController::class, 'login']);
@@ -68,6 +69,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/returns', [ReturnController::class, 'store']);
     Route::get('/returns/lookup/{id}', [ReturnController::class, 'lookupTransaction']);
     Route::get('/returns/{id}', [ReturnController::class, 'show']);
+
+    // Reparations routes
+    Route::get('/reparations/stats', [ReparationController::class, 'stats']);
+    Route::patch('/reparations/{id}/status', [ReparationController::class, 'updateStatus']);
+    Route::apiResource('reparations', ReparationController::class);
 
     // Scanner routes
     Route::get('/scanner/products/{barcode}', [ScannerController::class, 'product']);

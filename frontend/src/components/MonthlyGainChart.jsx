@@ -61,17 +61,25 @@ export default function MonthlyGainChart() {
         <div style={styles.tooltipContainer}>
           <div style={styles.tooltipHeader}>{data.month_label}</div>
           <div style={styles.tooltipRow('#2563eb')}>
-            <span>Total Vendu (CA):</span>
+            <span>Ventes Magasin (CA):</span>
             <strong>{Number(data.total_sold).toFixed(2)} MAD</strong>
           </div>
+          {Number(data.reparations_revenue || 0) > 0 && (
+            <div style={styles.tooltipRow('#0284c7')}>
+              <span>Atelier Réparations (CA):</span>
+              <strong>{Number(data.reparations_revenue).toFixed(2)} MAD</strong>
+            </div>
+          )}
           <div style={styles.tooltipRow(data.net_profit >= 0 ? '#16a34a' : '#dc2626')}>
-            <span>Gain Net (Bénéfice):</span>
+            <span>Gain Net Total:</span>
             <strong>{formatGain(data.net_profit, 2)}</strong>
           </div>
-          <div style={styles.tooltipRow('#6b7280')}>
-            <span>Marge Nette:</span>
-            <strong>{margin}%</strong>
-          </div>
+          {Number(data.reparations_profit || 0) > 0 && (
+            <div style={styles.tooltipRow('#059669')}>
+              <span>(dont Gain Réparations):</span>
+              <strong>{formatGain(data.reparations_profit, 2)}</strong>
+            </div>
+          )}
           <div style={styles.tooltipRow('#6b7280')}>
             <span>Articles Vendus:</span>
             <strong>{data.items_sold_count} unités ({data.transactions_count} vent.)</strong>
@@ -128,7 +136,11 @@ export default function MonthlyGainChart() {
           <div style={styles.kpiValue('#15803d')}>
             {isLoading ? '...' : formatGain(summary.total_profit, 2)}
           </div>
-          <div style={styles.kpiSub}>Bénéfice accumulé sur l'année</div>
+          <div style={styles.kpiSub}>
+            {summary.total_reparations_profit > 0 
+              ? `Ventes: ${formatGain(summary.total_sales_profit, 0)} • Réparations: ${formatGain(summary.total_reparations_profit, 0)}`
+              : "Bénéfice accumulé sur l'année"}
+          </div>
         </div>
 
         <div style={styles.kpiBox('#fefce8', '#ca8a04')}>

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Transaction;
 use App\Models\TransactionItem;
+use App\Models\ProductReturn;
+use App\Models\Reparation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -43,6 +45,12 @@ class ReportController extends Controller
         $totalYearlyProfit = 0.0;
         $totalYearlyItemsSold = 0;
         $totalYearlyTransactions = 0;
+        $totalYearlyRefunds = 0.0;
+
+        $totalYearlyRepRevenue = 0.0;
+        $totalYearlyRepCost = 0.0;
+        $totalYearlyRepProfit = 0.0;
+        $totalYearlyRepCount = 0;
 
         $monthNames = [
             1 => 'Jan', 2 => 'Fév', 3 => 'Mar', 4 => 'Avr',
@@ -57,11 +65,17 @@ class ReportController extends Controller
             ->get();
 
         // Fetch all returns for the year
-        $returns = \App\Models\ProductReturn::whereYear('created_at', $year)
+        $returns = ProductReturn::whereYear('created_at', $year)
             ->with(['items.product'])
             ->get();
 
-        $totalYearlyRefunds = 0.0;
+        // Fetch all non-cancelled reparations for the year
+        $reparations = Reparation::where(function ($q) use ($year) {
+                $q->whereYear('date_depot', $year)
+                  ->orWhereYear('date_retrait', $year);
+            })
+            ->where('status', '!=', 'annule')
+            ->get();
 
         for ($m = 1; $m <= 12; $m++) {
             $monthSales = $sales->filter(function ($tx) use ($m) {
@@ -70,6 +84,11 @@ class ReportController extends Controller
 
             $monthReturns = $returns->filter(function ($ret) use ($m) {
                 return Carbon::parse($ret->created_at)->month === $m;
+            });
+
+            $monthReparations = $reparations->filter(function ($rep) use ($m) {
+                $refDate = $rep->date_retrait ?: $rep->date_depot;
+                return Carbon::parse($refDate)->month === $m;
             });
 
             $monthGrossRevenue = (float) $monthSales->sum('total_amount');
@@ -101,29 +120,57 @@ class ReportController extends Controller
             }
 
             $monthNetCost = max(0, $monthCost - $returnedRestockedCost);
-            $monthProfit = $monthNetRevenue - $monthNetCost;
+            $monthSalesProfit = $monthNetRevenue - $monthNetCost;
+
+            // Reparation figures
+            $monthRepRevenue = (float) $monthReparations->sum('total_price');
+            $monthRepCost = (float) $monthReparations->sum('cout_pieces');
+            $monthRepProfit = (float) $monthReparations->sum('gain');
+            $monthRepCount = $monthReparations->count();
+
+            // Combined figures
+            $monthCombinedRevenue = $monthNetRevenue + $monthRepRevenue;
+            $monthCombinedProfit = $monthSalesProfit + $monthRepProfit;
 
             $totalYearlySales += $monthNetRevenue;
             $totalYearlyCost += $monthNetCost;
-            $totalYearlyProfit += $monthProfit;
+            $totalYearlyProfit += $monthSalesProfit;
             $totalYearlyItemsSold += $monthItemsSold;
             $totalYearlyTransactions += $monthTxCount;
             $totalYearlyRefunds += $monthRefunds;
+
+            $totalYearlyRepRevenue += $monthRepRevenue;
+            $totalYearlyRepCost += $monthRepCost;
+            $totalYearlyRepProfit += $monthRepProfit;
+            $totalYearlyRepCount += $monthRepCount;
 
             $monthlyData[] = [
                 'month_num' => $m,
                 'month_name' => $monthNames[$m],
                 'month_label' => $monthNames[$m] . ' ' . $year,
-                'total_sold' => round($monthNetRevenue, 2),
+                // POS sales breakdown
+                'sales_revenue' => round($monthNetRevenue, 2),
                 'gross_sold' => round($monthGrossRevenue, 2),
                 'refunds' => round($monthRefunds, 2),
-                'total_cost' => round($monthNetCost, 2),
-                'net_profit' => round($monthProfit, 2),
+                'sales_cost' => round($monthNetCost, 2),
+                'sales_profit' => round($monthSalesProfit, 2),
                 'items_sold_count' => $monthItemsSold,
                 'transactions_count' => $monthTxCount,
                 'returns_count' => $monthReturnsCount,
+                // Reparations breakdown
+                'reparations_revenue' => round($monthRepRevenue, 2),
+                'reparations_cost' => round($monthRepCost, 2),
+                'reparations_profit' => round($monthRepProfit, 2),
+                'reparations_count' => $monthRepCount,
+                // Combined & legacy keys for compatibility
+                'total_sold' => round($monthNetRevenue, 2),
+                'total_cost' => round($monthNetCost + $monthRepCost, 2),
+                'total_combined_revenue' => round($monthCombinedRevenue, 2),
+                'net_profit' => round($monthCombinedProfit, 2), // combined profit
             ];
         }
+
+        $totalYearlyCombinedProfit = $totalYearlyProfit + $totalYearlyRepProfit;
 
         return response()->json([
             'year' => $year,
@@ -131,9 +178,16 @@ class ReportController extends Controller
                 'total_sales' => round($totalYearlySales, 2),
                 'total_refunds' => round($totalYearlyRefunds, 2),
                 'total_cost' => round($totalYearlyCost, 2),
-                'total_profit' => round($totalYearlyProfit, 2),
+                'total_sales_profit' => round($totalYearlyProfit, 2),
                 'total_items_sold' => $totalYearlyItemsSold,
                 'total_transactions' => $totalYearlyTransactions,
+                // Reparations yearly summary
+                'total_reparations_revenue' => round($totalYearlyRepRevenue, 2),
+                'total_reparations_cost' => round($totalYearlyRepCost, 2),
+                'total_reparations_profit' => round($totalYearlyRepProfit, 2),
+                'total_reparations_count' => $totalYearlyRepCount,
+                // Grand total profit combined
+                'total_profit' => round($totalYearlyCombinedProfit, 2),
             ],
             'monthly' => $monthlyData,
             'currency' => 'MAD',
@@ -155,7 +209,9 @@ class ReportController extends Controller
             $targetDate = Carbon::today();
         }
 
-        // Total products sold on target date (quantity & revenue)
+        $targetDateStr = $targetDate->toDateString();
+
+        // 1. Total products sold on target date (quantity & revenue)
         $saleItems = TransactionItem::whereHas('transaction', function ($query) use ($targetDate) {
             $query->where('type', 'sale')
                   ->whereDate('transaction_date', $targetDate);
@@ -197,8 +253,8 @@ class ReportController extends Controller
             ];
         })->values()->sortByDesc('total_revenue')->values()->all();
 
-        // Daily product returns and refunds
-        $returnsToday = \App\Models\ProductReturn::with(['items.product'])
+        // 2. Daily product returns and refunds
+        $returnsToday = ProductReturn::with(['items.product'])
             ->whereDate('created_at', $targetDate)
             ->get();
 
@@ -220,7 +276,27 @@ class ReportController extends Controller
         $rawCostOfGoodsSold = collect($productsSold)->sum('total_cost');
         $netCostOfGoodsSold = max(0, $rawCostOfGoodsSold - $restockedReturnedCost);
         $netSalesRevenue = $totalSalesRevenue - $totalRefundsToday;
-        $netProfit = $netSalesRevenue - $netCostOfGoodsSold;
+        $netSalesProfit = $netSalesRevenue - $netCostOfGoodsSold;
+
+        // 3. Reparations for target date (separated)
+        $reparationsToday = Reparation::where(function ($q) use ($targetDateStr) {
+                $q->whereDate('date_retrait', $targetDateStr)
+                  ->orWhere(function ($sub) use ($targetDateStr) {
+                      $sub->whereDate('date_depot', $targetDateStr)
+                          ->where('status', '!=', 'annule');
+                  });
+            })
+            ->with('parts')
+            ->get();
+
+        $reparationsRevenueToday = (float) $reparationsToday->sum('total_price');
+        $reparationsCostToday = (float) $reparationsToday->sum('cout_pieces');
+        $reparationsProfitToday = (float) $reparationsToday->sum('gain');
+        $reparationsCountToday = $reparationsToday->count();
+
+        // Grand totals
+        $grandTotalRevenue = $netSalesRevenue + $reparationsRevenueToday;
+        $grandTotalProfit = $netSalesProfit + $reparationsProfitToday;
 
         return [
             'date' => $targetDate->toDateString(),
@@ -232,7 +308,8 @@ class ReportController extends Controller
             'total_refunds_today' => round($totalRefundsToday, 2),
             'total_sales_revenue' => round($netSalesRevenue, 2),
             'total_cost_of_goods_sold' => round($netCostOfGoodsSold, 2),
-            'net_profit_today' => round($netProfit, 2),
+            'net_profit_today' => round($grandTotalProfit, 2), // combined profit
+            'sales_profit_today' => round($netSalesProfit, 2),
             'currency' => 'MAD',
             'products_sold' => $productsSold,
             'returns_summary' => $returnsToday->map(fn ($r) => [
@@ -242,6 +319,32 @@ class ReportController extends Controller
                 'reason' => $r->reason,
                 'time' => Carbon::parse($r->created_at)->format('H:i'),
             ])->values()->all(),
+            // Reparations separate breakdown:
+            'reparations' => [
+                'count' => $reparationsCountToday,
+                'revenue' => round($reparationsRevenueToday, 2),
+                'cost' => round($reparationsCostToday, 2),
+                'profit' => round($reparationsProfitToday, 2),
+                'items' => $reparationsToday->map(fn ($r) => [
+                    'id' => $r->id,
+                    'ticket_number' => $r->ticket_number,
+                    'client_name' => $r->client_name,
+                    'client_phone' => $r->client_phone,
+                    'device' => trim(($r->brand ?? '') . ' ' . ($r->model ?? '')),
+                    'status' => $r->status,
+                    'total_price' => (float) $r->total_price,
+                    'cout_pieces' => (float) $r->cout_pieces,
+                    'gain' => (float) $r->gain,
+                ])->values()->all(),
+            ],
+            'combined_summary' => [
+                'sales_revenue' => round($netSalesRevenue, 2),
+                'sales_profit' => round($netSalesProfit, 2),
+                'reparations_revenue' => round($reparationsRevenueToday, 2),
+                'reparations_profit' => round($reparationsProfitToday, 2),
+                'grand_total_revenue' => round($grandTotalRevenue, 2),
+                'grand_total_profit' => round($grandTotalProfit, 2),
+            ],
         ];
     }
 }
