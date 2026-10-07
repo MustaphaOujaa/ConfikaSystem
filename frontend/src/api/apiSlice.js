@@ -339,7 +339,10 @@ export const apiSlice = createApi({
     // Reparations
     getReparations: builder.query({
       query: (params = {}) => {
-        const queryParams = new URLSearchParams(params).toString();
+        const cleanParams = Object.fromEntries(
+          Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+        );
+        const queryParams = new URLSearchParams(cleanParams).toString();
         return `/reparations${queryParams ? `?${queryParams}` : ''}`;
       },
       providesTags: ['Reparation'],
@@ -387,7 +390,10 @@ export const apiSlice = createApi({
     // Workshop Spare Parts Inventory
     getReparationInventoryParts: builder.query({
       query: (params = {}) => {
-        const queryParams = new URLSearchParams(params).toString();
+        const cleanParams = Object.fromEntries(
+          Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+        );
+        const queryParams = new URLSearchParams(cleanParams).toString();
         return `/reparation-inventory-parts${queryParams ? `?${queryParams}` : ''}`;
       },
       providesTags: ['ReparationInventoryPart'],

@@ -665,7 +665,7 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
               <DollarSign size={16} color="#0284c7" />
               <span>6. Règlement & Montants</span>
             </div>
-            <div style={styles.grid3}>
+            <div style={{ ...styles.grid3, alignItems: 'end' }}>
               <div>
                 <label style={styles.label}>Montant total que le client doit payer (DH) *</label>
                 <input
@@ -717,7 +717,7 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
             )}
 
             {/* Dates & Status */}
-            <div style={{ ...styles.grid4, marginTop: '12px' }}>
+            <div style={{ ...styles.grid4, marginTop: '12px', alignItems: 'end' }}>
               <div>
                 <label style={styles.label}>Date de dépôt</label>
                 <input
