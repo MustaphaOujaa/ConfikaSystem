@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ReparationCreated;
+use App\Events\ReparationUpdated;
+use App\Events\ReparationDeleted;
 use App\Models\Reparation;
 use App\Models\ReparationPart;
 use App\Models\ReparationInventoryPart;
@@ -217,6 +220,13 @@ class ReparationController extends Controller
                 $reparation->parts->makeHidden(['cost_price']);
             }
 
+            // Broadcast to all connected clients
+            try {
+                event(new ReparationCreated($reparation));
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning('ReparationCreated broadcast failed: ' . $e->getMessage());
+            }
+
             return response()->json([
                 'message' => 'Bon de réparation créé avec succès.',
                 'data' => $reparation,
@@ -328,6 +338,13 @@ class ReparationController extends Controller
                 $reparation->parts->makeHidden(['cost_price']);
             }
 
+            // Broadcast to all connected clients
+            try {
+                event(new ReparationUpdated($reparation));
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning('ReparationUpdated broadcast failed: ' . $e->getMessage());
+            }
+
             return response()->json([
                 'message' => 'Réparation mise à jour avec succès.',
                 'data' => $reparation,
@@ -357,6 +374,13 @@ class ReparationController extends Controller
 
         $reparation->save();
 
+        // Broadcast status change
+        try {
+            event(new ReparationUpdated($reparation->load(['parts', 'user:id,name'])));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('ReparationUpdated broadcast failed: ' . $e->getMessage());
+        }
+
         return response()->json([
             'message' => 'Statut mis à jour.',
             'data' => $reparation,
@@ -370,7 +394,15 @@ class ReparationController extends Controller
         }
 
         $reparation = Reparation::findOrFail($id);
+        $reparationId = $reparation->id;
         $reparation->delete();
+
+        // Broadcast deletion
+        try {
+            event(new ReparationDeleted($reparationId));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('ReparationDeleted broadcast failed: ' . $e->getMessage());
+        }
 
         return response()->json(['message' => 'Bon de réparation supprimé.']);
     }

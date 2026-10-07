@@ -69,6 +69,30 @@ export function useRealtimeSync() {
       .listen('.transaction.created', handleTransactionChange)
       .listen('TransactionCreated', handleTransactionChange);
 
+    // Subscribe to reparations channel
+    const reparationsChannel = echo.channel('reparations');
+    const handleReparationChange = () => {
+      dispatch(apiSlice.util.invalidateTags(['Reparation', 'ReparationInventoryPart', 'Product', 'LowStock', 'DailyReport']));
+    };
+
+    reparationsChannel
+      .listen('.reparation.created', handleReparationChange)
+      .listen('ReparationCreated', handleReparationChange)
+      .listen('.reparation.updated', handleReparationChange)
+      .listen('ReparationUpdated', handleReparationChange)
+      .listen('.reparation.deleted', handleReparationChange)
+      .listen('ReparationDeleted', handleReparationChange);
+
+    // Subscribe to workshop reparation inventory channel
+    const reparationInventoryChannel = echo.channel('reparation-inventory');
+    const handleReparationInventoryChange = () => {
+      dispatch(apiSlice.util.invalidateTags(['ReparationInventoryPart']));
+    };
+
+    reparationInventoryChannel
+      .listen('.inventory.part.changed', handleReparationInventoryChange)
+      .listen('ReparationInventoryPartChanged', handleReparationInventoryChange);
+
     return () => {
       inventoryChannel.stopListening('.product.created');
       inventoryChannel.stopListening('ProductCreated');
@@ -90,8 +114,18 @@ export function useRealtimeSync() {
       inventoryChannel.stopListening('CategoryDeleted');
       transactionsChannel.stopListening('.transaction.created');
       transactionsChannel.stopListening('TransactionCreated');
+      reparationsChannel.stopListening('.reparation.created');
+      reparationsChannel.stopListening('ReparationCreated');
+      reparationsChannel.stopListening('.reparation.updated');
+      reparationsChannel.stopListening('ReparationUpdated');
+      reparationsChannel.stopListening('.reparation.deleted');
+      reparationsChannel.stopListening('ReparationDeleted');
+      reparationInventoryChannel.stopListening('.inventory.part.changed');
+      reparationInventoryChannel.stopListening('ReparationInventoryPartChanged');
       echo.leaveChannel('inventory');
       echo.leaveChannel('transactions');
+      echo.leaveChannel('reparations');
+      echo.leaveChannel('reparation-inventory');
     };
   }, [dispatch]);
 

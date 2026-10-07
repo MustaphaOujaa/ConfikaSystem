@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ReparationInventoryPartChanged;
 use App\Models\ReparationInventoryPart;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,11 +48,11 @@ class ReparationInventoryPartController extends Controller
         $totalItemsCount = ReparationInventoryPart::count();
         $totalUnits = (int) ReparationInventoryPart::sum('quantity');
         $lowStockCount = ReparationInventoryPart::whereColumn('quantity', '<=', 'min_stock_alert')->count();
-        
+
         $stats = [
             'total_references' => $totalItemsCount,
-            'total_units' => $totalUnits,
-            'low_stock_count' => $lowStockCount,
+            'total_units'      => $totalUnits,
+            'low_stock_count'  => $lowStockCount,
         ];
 
         if ($isAdmin) {
@@ -61,28 +62,34 @@ class ReparationInventoryPartController extends Controller
 
         return response()->json([
             'paginated' => $paginated,
-            'stats' => $stats,
+            'stats'     => $stats,
         ]);
     }
 
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'brand' => 'nullable|string|max:100',
-            'compatible_model' => 'nullable|string|max:150',
-            'quantity' => 'required|integer|min:0',
-            'cost_price' => 'required|numeric|min:0',
+            'name'            => 'required|string|max:255',
+            'brand'           => 'nullable|string|max:100',
+            'compatible_model'=> 'nullable|string|max:150',
+            'quantity'        => 'required|integer|min:0',
+            'cost_price'      => 'required|numeric|min:0',
             'min_stock_alert' => 'nullable|integer|min:0',
-            'location' => 'nullable|string|max:100',
-            'notes' => 'nullable|string',
+            'location'        => 'nullable|string|max:100',
+            'notes'           => 'nullable|string',
         ]);
 
         $part = ReparationInventoryPart::create($validated);
 
+        try {
+            event(new ReparationInventoryPartChanged('created', $part->toArray()));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('ReparationInventoryPartChanged broadcast failed: ' . $e->getMessage());
+        }
+
         return response()->json([
             'message' => 'Pièce ajoutée au stock avec succès.',
-            'data' => $part,
+            'data'    => $part,
         ], 201);
     }
 
@@ -97,21 +104,27 @@ class ReparationInventoryPartController extends Controller
         $part = ReparationInventoryPart::findOrFail($id);
 
         $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'brand' => 'nullable|string|max:100',
-            'compatible_model' => 'nullable|string|max:150',
-            'quantity' => 'sometimes|required|integer|min:0',
-            'cost_price' => 'sometimes|required|numeric|min:0',
+            'name'            => 'sometimes|required|string|max:255',
+            'brand'           => 'nullable|string|max:100',
+            'compatible_model'=> 'nullable|string|max:150',
+            'quantity'        => 'sometimes|required|integer|min:0',
+            'cost_price'      => 'sometimes|required|numeric|min:0',
             'min_stock_alert' => 'nullable|integer|min:0',
-            'location' => 'nullable|string|max:100',
-            'notes' => 'nullable|string',
+            'location'        => 'nullable|string|max:100',
+            'notes'           => 'nullable|string',
         ]);
 
         $part->update($validated);
 
+        try {
+            event(new ReparationInventoryPartChanged('updated', $part->toArray()));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('ReparationInventoryPartChanged broadcast failed: ' . $e->getMessage());
+        }
+
         return response()->json([
             'message' => 'Pièce mise à jour.',
-            'data' => $part,
+            'data'    => $part,
         ]);
     }
 
@@ -120,7 +133,7 @@ class ReparationInventoryPartController extends Controller
         $part = ReparationInventoryPart::findOrFail($id);
 
         $validated = $request->validate([
-            'type' => 'required|in:add,subtract,set',
+            'type'   => 'required|in:add,subtract,set',
             'amount' => 'required|integer|min:0',
         ]);
 
@@ -136,9 +149,17 @@ class ReparationInventoryPartController extends Controller
             $part->save();
         }
 
+        $part->refresh();
+
+        try {
+            event(new ReparationInventoryPartChanged('updated', $part->toArray()));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('ReparationInventoryPartChanged broadcast failed: ' . $e->getMessage());
+        }
+
         return response()->json([
             'message' => 'Stock ajusté.',
-            'data' => $part,
+            'data'    => $part,
         ]);
     }
 
@@ -149,7 +170,14 @@ class ReparationInventoryPartController extends Controller
         }
 
         $part = ReparationInventoryPart::findOrFail($id);
+        $partId = $part->id;
         $part->delete();
+
+        try {
+            event(new ReparationInventoryPartChanged('deleted', null, $partId));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('ReparationInventoryPartChanged broadcast failed: ' . $e->getMessage());
+        }
 
         return response()->json(['message' => 'Pièce supprimée du stock.']);
     }
