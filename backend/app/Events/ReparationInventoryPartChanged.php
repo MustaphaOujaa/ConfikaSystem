@@ -12,6 +12,7 @@ class ReparationInventoryPartChanged implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    public bool $afterCommit = true;
     public string $action; // created | updated | deleted
     public ?array $part;
     public ?int $partId;
@@ -25,7 +26,11 @@ class ReparationInventoryPartChanged implements ShouldBroadcastNow
 
     public function broadcastOn(): array
     {
-        return [new Channel('reparation-inventory')];
+        return [
+            new Channel('inventory'),
+            new Channel('reparations'),
+            new Channel('reparation-inventory'),
+        ];
     }
 
     public function broadcastAs(): string

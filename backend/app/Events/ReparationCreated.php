@@ -13,6 +13,7 @@ class ReparationCreated implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    public bool $afterCommit = true;
     public Reparation $reparation;
 
     public function __construct(Reparation $reparation)
@@ -22,7 +23,11 @@ class ReparationCreated implements ShouldBroadcastNow
 
     public function broadcastOn(): array
     {
-        return [new Channel('reparations')];
+        return [
+            new Channel('inventory'),
+            new Channel('reparations'),
+            new Channel('reparation-inventory'),
+        ];
     }
 
     public function broadcastAs(): string

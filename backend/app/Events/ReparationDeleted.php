@@ -12,6 +12,7 @@ class ReparationDeleted implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    public bool $afterCommit = true;
     public int $reparationId;
 
     public function __construct(int $reparationId)
@@ -21,7 +22,11 @@ class ReparationDeleted implements ShouldBroadcastNow
 
     public function broadcastOn(): array
     {
-        return [new Channel('reparations')];
+        return [
+            new Channel('inventory'),
+            new Channel('reparations'),
+            new Channel('reparation-inventory'),
+        ];
     }
 
     public function broadcastAs(): string

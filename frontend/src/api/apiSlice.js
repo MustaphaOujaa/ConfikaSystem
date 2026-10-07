@@ -361,7 +361,7 @@ export const apiSlice = createApi({
         method: 'POST',
         body: data,
       }),
-      invalidatesTags: ['Reparation', 'DailyReport', { type: 'Product', id: 'LIST' }],
+      invalidatesTags: ['Reparation', 'ReparationInventoryPart', 'DailyReport', { type: 'Product', id: 'LIST' }],
     }),
     updateReparation: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -369,7 +369,7 @@ export const apiSlice = createApi({
         method: 'PUT',
         body: data,
       }),
-      invalidatesTags: ['Reparation', 'DailyReport', { type: 'Product', id: 'LIST' }],
+      invalidatesTags: ['Reparation', 'ReparationInventoryPart', 'DailyReport', { type: 'Product', id: 'LIST' }],
     }),
     updateReparationStatus: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -377,14 +377,14 @@ export const apiSlice = createApi({
         method: 'PATCH',
         body: data,
       }),
-      invalidatesTags: ['Reparation', 'DailyReport'],
+      invalidatesTags: ['Reparation', 'ReparationInventoryPart', 'DailyReport'],
     }),
     deleteReparation: builder.mutation({
       query: (id) => ({
         url: `/reparations/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Reparation', 'DailyReport'],
+      invalidatesTags: ['Reparation', 'ReparationInventoryPart', 'DailyReport'],
     }),
 
     // Workshop Spare Parts Inventory
@@ -404,7 +404,7 @@ export const apiSlice = createApi({
         method: 'POST',
         body: data,
       }),
-      invalidatesTags: ['ReparationInventoryPart'],
+      invalidatesTags: ['ReparationInventoryPart', 'Reparation'],
     }),
     updateReparationInventoryPart: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -412,7 +412,7 @@ export const apiSlice = createApi({
         method: 'PUT',
         body: data,
       }),
-      invalidatesTags: ['ReparationInventoryPart'],
+      invalidatesTags: ['ReparationInventoryPart', 'Reparation'],
     }),
     adjustReparationInventoryPartStock: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -420,14 +420,14 @@ export const apiSlice = createApi({
         method: 'PATCH',
         body: data,
       }),
-      invalidatesTags: ['ReparationInventoryPart'],
+      invalidatesTags: ['ReparationInventoryPart', 'Reparation'],
     }),
     deleteReparationInventoryPart: builder.mutation({
       query: (id) => ({
         url: `/reparation-inventory-parts/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['ReparationInventoryPart'],
+      invalidatesTags: ['ReparationInventoryPart', 'Reparation'],
     }),
   }),
 });

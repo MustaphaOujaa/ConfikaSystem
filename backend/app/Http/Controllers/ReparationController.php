@@ -220,18 +220,20 @@ class ReparationController extends Controller
                 $reparation->parts->makeHidden(['cost_price']);
             }
 
-            // Broadcast to all connected clients
-            try {
-                event(new ReparationCreated($reparation));
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::warning('ReparationCreated broadcast failed: ' . $e->getMessage());
-            }
-
-            return response()->json([
-                'message' => 'Bon de réparation créé avec succès.',
-                'data' => $reparation,
-            ], 201);
+            return $reparation;
         });
+
+        // Broadcast to all connected clients AFTER transaction commit
+        try {
+            event(new ReparationCreated($reparation));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('ReparationCreated broadcast failed: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'message' => 'Bon de réparation créé avec succès.',
+            'data' => $reparation,
+        ], 201);
     }
 
     public function show(Request $request, int $id): JsonResponse
@@ -338,18 +340,20 @@ class ReparationController extends Controller
                 $reparation->parts->makeHidden(['cost_price']);
             }
 
-            // Broadcast to all connected clients
-            try {
-                event(new ReparationUpdated($reparation));
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::warning('ReparationUpdated broadcast failed: ' . $e->getMessage());
-            }
-
-            return response()->json([
-                'message' => 'Réparation mise à jour avec succès.',
-                'data' => $reparation,
-            ]);
+            return $reparation;
         });
+
+        // Broadcast to all connected clients AFTER transaction commit
+        try {
+            event(new ReparationUpdated($reparation));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('ReparationUpdated broadcast failed: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'message' => 'Réparation mise à jour avec succès.',
+            'data' => $reparation,
+        ]);
     }
 
     public function updateStatus(Request $request, int $id): JsonResponse
