@@ -1,10 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Smartphone, User, AlertCircle, Wrench, Calendar, DollarSign } from 'lucide-react';
-import { useCreateReparationMutation, useUpdateReparationMutation } from '../../api/apiSlice';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  X, 
+  Plus, 
+  Trash2, 
+  Smartphone, 
+  User, 
+  AlertCircle, 
+  Wrench, 
+  Calendar, 
+  DollarSign, 
+  Package, 
+  Search,
+  Check
+} from 'lucide-react';
+import { 
+  useCreateReparationMutation, 
+  useUpdateReparationMutation,
+  useLazyGetProductsQuery 
+} from '../../api/apiSlice';
 
 export default function ReparationModal({ isOpen, onClose, initialData = null, isAdmin = false }) {
   const [createReparation, { isLoading: isCreating }] = useCreateReparationMutation();
   const [updateReparation, { isLoading: isUpdating }] = useUpdateReparationMutation();
+  const [fetchStockProducts, { data: stockSearchResults, isFetching: isSearchingStock }] = useLazyGetProductsQuery();
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -35,6 +53,11 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
   });
 
   const [errorMsg, setErrorMsg] = useState('');
+  
+  // Stock product picker state
+  const [stockSearch, setStockSearch] = useState('');
+  const [showStockDropdown, setShowStockDropdown] = useState(false);
+  const stockSearchRef = useRef(null);
 
   useEffect(() => {
     if (initialData) {
@@ -62,10 +85,10 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
         date_prevue: initialData.date_prevue ? initialData.date_prevue.split('T')[0] : '',
         date_retrait: initialData.date_retrait ? initialData.date_retrait.split('T')[0] : '',
         parts: initialData.parts ? initialData.parts.map(p => ({
+          product_id: p.product_id || null,
           name: p.name || '',
           quantity: p.quantity || 1,
           cost_price: p.cost_price !== undefined ? p.cost_price : 0,
-          selling_price: p.selling_price !== undefined ? p.selling_price : 0,
         })) : [],
       });
     } else {
@@ -96,7 +119,20 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
       });
     }
     setErrorMsg('');
+    setStockSearch('');
+    setShowStockDropdown(false);
   }, [initialData, isOpen, todayStr]);
+
+  // Click outside listener for stock search dropdown
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (stockSearchRef.current && !stockSearchRef.current.contains(event.target)) {
+        setShowStockDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -108,13 +144,43 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
     }));
   };
 
-  // Parts handlers
-  const handleAddPart = () => {
+  // Stock search handler
+  const handleStockSearchChange = (e) => {
+    const val = e.target.value;
+    setStockSearch(val);
+    if (val.trim().length >= 1) {
+      fetchStockProducts({ search: val.trim(), per_page: 8 });
+      setShowStockDropdown(true);
+    } else {
+      setShowStockDropdown(false);
+    }
+  };
+
+  const handleSelectStockProduct = (product) => {
     setFormData((prev) => ({
       ...prev,
       parts: [
         ...prev.parts,
-        { name: '', quantity: 1, cost_price: 0, selling_price: 0 }
+        {
+          product_id: product.id,
+          name: product.name,
+          quantity: 1,
+          cost_price: parseFloat(product.cost_price || 0),
+          stock_available: product.quantity,
+        },
+      ],
+    }));
+    setStockSearch('');
+    setShowStockDropdown(false);
+  };
+
+  // Add custom manual part handler
+  const handleAddCustomPart = () => {
+    setFormData((prev) => ({
+      ...prev,
+      parts: [
+        ...prev.parts,
+        { product_id: null, name: '', quantity: 1, cost_price: 0 },
       ],
     }));
   };
@@ -163,7 +229,7 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
       return;
     }
     if (totalPriceNum < 0) {
-      setErrorMsg('Le montant estimé ne peut pas être négatif.');
+      setErrorMsg('Le montant total ne peut pas être négatif.');
       return;
     }
 
@@ -172,10 +238,10 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
       total_price: totalPriceNum,
       acompte: acompteNum,
       parts: formData.parts.map(p => ({
+        product_id: p.product_id || null,
         name: p.name,
         quantity: parseInt(p.quantity, 10) || 1,
         cost_price: parseFloat(p.cost_price) || 0,
-        selling_price: parseFloat(p.selling_price) || 0,
       })),
     };
 
@@ -190,6 +256,8 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
       setErrorMsg(err?.data?.message || 'Une erreur est survenue lors de l\'enregistrement.');
     }
   };
+
+  const stockProductsList = stockSearchResults?.data || [];
 
   return (
     <div style={styles.backdrop}>
@@ -407,7 +475,7 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
                   value={formData.description_panne}
                   onChange={handleChange}
                   rows={2}
-                  placeholder="Précisez ce qui ne marche pas (ex: caméra floue, afficheur noir après chute...)"
+                  placeholder="Précisez ce qui ne marche pas (ex: écran noir après chute, micro sourd, caméra...)"
                   style={styles.textarea}
                 />
               </div>
@@ -425,38 +493,103 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
             </div>
           </div>
 
-          {/* SECTION 5: PIÈCES NÉCESSAIRES & COÛTS */}
+          {/* SECTION 5: PIÈCES NÉCESSAIRES (STOCK OU EXTERNE) */}
           <div style={styles.section}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
               <div style={styles.sectionHeader}>
                 <Wrench size={16} color="#0284c7" />
                 <span>5. Pièces & Fournitures nécessaires</span>
               </div>
-              <button
-                type="button"
-                onClick={handleAddPart}
-                style={styles.addPartBtn}
-              >
-                <Plus size={14} style={{ marginRight: '4px' }} />
-                Ajouter une pièce
-              </button>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={handleAddCustomPart}
+                  style={styles.addCustomBtn}
+                  title="Ajouter une pièce achetée hors magasin"
+                >
+                  <Plus size={14} style={{ marginRight: '4px' }} />
+                  Pièce externe
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Search & Select from Store Stock */}
+            <div ref={stockSearchRef} style={styles.stockSearchContainer}>
+              <div style={styles.stockSearchInputWrapper}>
+                <Package size={15} color="#0284c7" style={{ marginRight: '6px', flexShrink: 0 }} />
+                <input
+                  type="text"
+                  placeholder="Rechercher une pièce déjà en stock magasin (nom, modèle, code)..."
+                  value={stockSearch}
+                  onChange={handleStockSearchChange}
+                  onFocus={() => {
+                    if (stockSearch.trim().length >= 1) setShowStockDropdown(true);
+                  }}
+                  style={styles.stockSearchInput}
+                />
+                {isSearchingStock && <span style={{ fontSize: '11px', color: '#6b7280' }}>Recherche...</span>}
+              </div>
+
+              {/* Autocomplete Dropdown Results */}
+              {showStockDropdown && (
+                <div style={styles.stockDropdown}>
+                  {stockProductsList.length === 0 ? (
+                    <div style={styles.dropdownEmpty}>
+                      Aucun produit trouvé en magasin pour "{stockSearch}".
+                    </div>
+                  ) : (
+                    stockProductsList.map((product) => (
+                      <div
+                        key={product.id}
+                        onClick={() => handleSelectStockProduct(product)}
+                        style={styles.dropdownItem}
+                      >
+                        <div>
+                          <div style={{ fontWeight: '600', color: '#111827', fontSize: '13px' }}>
+                            {product.name}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                            {product.brand?.name ? `${product.brand.name} • ` : ''}
+                            {product.category?.name ? `${product.category.name}` : ''}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ 
+                            fontSize: '11px', 
+                            padding: '2px 6px', 
+                            borderRadius: '4px', 
+                            backgroundColor: (product.quantity || 0) > 0 ? '#dcfce7' : '#fee2e2',
+                            color: (product.quantity || 0) > 0 ? '#15803d' : '#b91c1c',
+                            fontWeight: '700'
+                          }}>
+                            Stock: {product.quantity || 0}
+                          </span>
+                          <div style={{ fontSize: '11px', color: '#4b5563', marginTop: '2px' }}>
+                            Coût: <strong>{parseFloat(product.cost_price || 0).toFixed(2)} DH</strong>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
 
             {formData.parts.length === 0 ? (
-              <p style={{ fontSize: '13px', color: '#9ca3af', fontStyle: 'italic', margin: '4px 0 8px 0' }}>
-                Aucune pièce renseignée (service ou réparation sans remplacement de pièce).
+              <p style={{ fontSize: '13px', color: '#9ca3af', fontStyle: 'italic', margin: '8px 0 4px 0' }}>
+                Aucune pièce sélectionnée (ex: réparation logicielle ou main d'œuvre seule).
               </p>
             ) : (
               <div style={styles.partsTableContainer}>
                 <table style={styles.partsTable}>
                   <thead>
                     <tr>
-                      <th style={styles.th}>Nom de la pièce</th>
-                      <th style={{ ...styles.th, width: '70px' }}>Qté</th>
-                      <th style={{ ...styles.th, width: '130px' }}>
+                      <th style={styles.th}>Nom de la pièce / Fourniture</th>
+                      <th style={{ ...styles.th, width: '80px' }}>Qté</th>
+                      <th style={{ ...styles.th, width: '150px' }}>
                         Coût Magasin (DH)
                       </th>
-                      <th style={{ ...styles.th, width: '130px' }}>Prix Client (DH)</th>
                       <th style={{ ...styles.th, width: '40px' }}></th>
                     </tr>
                   </thead>
@@ -464,14 +597,26 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
                     {formData.parts.map((part, idx) => (
                       <tr key={idx}>
                         <td style={styles.td}>
-                          <input
-                            type="text"
-                            value={part.name}
-                            onChange={(e) => handlePartChange(idx, 'name', e.target.value)}
-                            placeholder="Ex: Écran OLED iPhone 13"
-                            style={styles.partInput}
-                            required
-                          />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {part.product_id ? (
+                              <span style={styles.stockBadge} title="Pièce issue du stock magasin">
+                                <Package size={11} style={{ marginRight: '3px' }} />
+                                Stock Magasin
+                              </span>
+                            ) : (
+                              <span style={styles.externalBadge} title="Pièce achetée hors stock">
+                                Externe
+                              </span>
+                            )}
+                            <input
+                              type="text"
+                              value={part.name}
+                              onChange={(e) => handlePartChange(idx, 'name', e.target.value)}
+                              placeholder="Ex: Écran OLED Samsung A54"
+                              style={styles.partInput}
+                              required
+                            />
+                          </div>
                         </td>
                         <td style={styles.td}>
                           <input
@@ -494,21 +639,11 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
                           />
                         </td>
                         <td style={styles.td}>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={part.selling_price}
-                            onChange={(e) => handlePartChange(idx, 'selling_price', e.target.value)}
-                            placeholder="0.00"
-                            style={styles.partInput}
-                          />
-                        </td>
-                        <td style={styles.td}>
                           <button
                             type="button"
                             onClick={() => handleRemovePart(idx)}
                             style={styles.trashBtn}
+                            title="Supprimer"
                           >
                             <Trash2 size={14} color="#ef4444" />
                           </button>
@@ -521,15 +656,15 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
             )}
           </div>
 
-          {/* SECTION 6: MONTANTS, ACOMPTE & DATES */}
+          {/* SECTION 6: MONTANT TOTAL FACTURÉ AU CLIENT & ACOMPTE */}
           <div style={styles.section}>
             <div style={styles.sectionHeader}>
               <DollarSign size={16} color="#0284c7" />
-              <span>6. Tarification, Reste & Dates</span>
+              <span>6. Règlement & Montants</span>
             </div>
             <div style={styles.grid3}>
               <div>
-                <label style={styles.label}>Montant total estimé (DH) *</label>
+                <label style={styles.label}>Montant total que le client doit payer (DH) *</label>
                 <input
                   type="number"
                   step="0.01"
@@ -537,13 +672,13 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
                   name="total_price"
                   value={formData.total_price}
                   onChange={handleChange}
-                  placeholder="0.00"
-                  style={{ ...styles.input, fontWeight: '700', fontSize: '15px' }}
+                  placeholder="Ex: 500.00"
+                  style={{ ...styles.input, fontWeight: '800', fontSize: '16px', color: '#0369a1' }}
                   required
                 />
               </div>
               <div>
-                <label style={styles.label}>Acompte versé (DH)</label>
+                <label style={styles.label}>Acompte versé au dépôt (DH)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -566,9 +701,14 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
             {/* Admin Financial preview box */}
             {isAdmin && (
               <div style={styles.adminProfitBox}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                   <span>Coût total des pièces : <strong>{partsTotalCost.toFixed(2)} DH</strong></span>
-                  <span>Bénéfice estimé magasin (Gain) : <strong style={{ color: estimatedGain >= 0 ? '#16a34a' : '#dc2626' }}>{estimatedGain.toFixed(2)} DH</strong></span>
+                  <span>
+                    Bénéfice Net Magasin (Gain) :{' '}
+                    <strong style={{ color: estimatedGain >= 0 ? '#16a34a' : '#dc2626' }}>
+                      {estimatedGain.toFixed(2)} DH
+                    </strong>
+                  </span>
                 </div>
               </div>
             )}
@@ -586,7 +726,7 @@ export default function ReparationModal({ isOpen, onClose, initialData = null, i
                 />
               </div>
               <div>
-                <label style={styles.label}>Date prévue</label>
+                <label style={styles.label}>Date prévue de retrait</label>
                 <input
                   type="date"
                   name="date_prevue"
@@ -653,7 +793,7 @@ const styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
@@ -680,7 +820,7 @@ const styles = {
     position: 'sticky',
     top: 0,
     backgroundColor: '#ffffff',
-    zIndex: 10,
+    zIndex: 20,
   },
   title: {
     margin: 0,
@@ -805,13 +945,64 @@ const styles = {
     color: '#374151',
     cursor: 'pointer',
   },
-  addPartBtn: {
+  stockSearchContainer: {
+    position: 'relative',
+    marginBottom: '12px',
+  },
+  stockSearchInputWrapper: {
     display: 'flex',
     alignItems: 'center',
-    backgroundColor: '#e0f2fe',
-    color: '#0284c7',
-    border: 'none',
+    backgroundColor: '#ffffff',
+    border: '1px solid #bae6fd',
+    borderRadius: '6px',
     padding: '6px 12px',
+  },
+  stockSearchInput: {
+    border: 'none',
+    outline: 'none',
+    fontSize: '13px',
+    width: '100%',
+  },
+  stockDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+    zIndex: 50,
+    maxHeight: '220px',
+    overflowY: 'auto',
+    marginTop: '4px',
+  },
+  dropdownItem: {
+    padding: '8px 12px',
+    borderBottom: '1px solid #f3f4f6',
+    cursor: 'pointer',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    transition: 'background-color 0.15s ease',
+    ':hover': {
+      backgroundColor: '#f0f9ff',
+    },
+  },
+  dropdownEmpty: {
+    padding: '12px',
+    fontSize: '12px',
+    color: '#6b7280',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  addCustomBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    color: '#374151',
+    border: '1px solid #d1d5db',
+    padding: '5px 10px',
     borderRadius: '6px',
     fontSize: '12px',
     fontWeight: '600',
@@ -834,6 +1025,28 @@ const styles = {
   },
   td: {
     padding: '6px 8px',
+  },
+  stockBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '3px 6px',
+    backgroundColor: '#e0f2fe',
+    color: '#0369a1',
+    fontSize: '10px',
+    fontWeight: '700',
+    borderRadius: '4px',
+    whiteSpace: 'nowrap',
+  },
+  externalBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '3px 6px',
+    backgroundColor: '#f3f4f6',
+    color: '#6b7280',
+    fontSize: '10px',
+    fontWeight: '700',
+    borderRadius: '4px',
+    whiteSpace: 'nowrap',
   },
   partInput: {
     width: '100%',
@@ -858,8 +1071,8 @@ const styles = {
     border: '1px solid #fecaca',
     borderRadius: '6px',
     color: '#b91c1c',
-    fontWeight: '700',
-    fontSize: '15px',
+    fontWeight: '800',
+    fontSize: '16px',
   },
   adminProfitBox: {
     marginTop: '10px',

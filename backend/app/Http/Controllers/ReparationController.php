@@ -18,34 +18,45 @@ class ReparationController extends Controller
         $query = Reparation::with(['parts', 'user:id,name']);
 
         // Search query
-        if ($search = $request->query('search')) {
+        if ($request->filled('search')) {
+            $search = trim($request->query('search'));
             $query->where(function ($q) use ($search) {
                 $q->where('ticket_number', 'like', "%{$search}%")
                   ->orWhere('client_name', 'like', "%{$search}%")
                   ->orWhere('client_phone', 'like', "%{$search}%")
                   ->orWhere('imei_serial', 'like', "%{$search}%")
                   ->orWhere('brand', 'like', "%{$search}%")
-                  ->orWhere('model', 'like', "%{$search}%");
+                  ->orWhere('model', 'like', "%{$search}%")
+                  ->orWhere('description_panne', 'like', "%{$search}%")
+                  ->orWhere('panne_autre', 'like', "%{$search}%")
+                  ->orWhere('remarques', 'like', "%{$search}%")
+                  ->orWhereHas('parts', function ($pq) use ($search) {
+                      $pq->where('name', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('user', function ($uq) use ($search) {
+                      $uq->where('name', 'like', "%{$search}%");
+                  });
             });
         }
 
         // Status filter
-        if ($status = $request->query('status')) {
-            if ($status !== 'all') {
-                $query->where('status', $status);
-            }
+        if ($request->filled('status') && $request->query('status') !== 'all') {
+            $query->where('status', $request->query('status'));
         }
 
         // Date filters
-        if ($fromDate = $request->query('from_date')) {
-            $query->whereDate('date_depot', '>=', $fromDate);
+        if ($request->filled('date')) {
+            $query->whereDate('date_depot', $request->query('date'));
         }
-        if ($toDate = $request->query('to_date')) {
-            $query->whereDate('date_depot', '<=', $toDate);
+        if ($request->filled('from_date')) {
+            $query->whereDate('date_depot', '>=', $request->query('from_date'));
+        }
+        if ($request->filled('to_date')) {
+            $query->whereDate('date_depot', '<=', $request->query('to_date'));
         }
 
         $perPage = (int) $request->query('per_page', 15);
-        $reparations = $query->orderBy('id', 'desc')->paginate($perPage);
+        $reparations = $query->latest()->paginate($perPage);
 
         // Mask costs and profits for non-admin cashiers
         if (! $isAdmin) {

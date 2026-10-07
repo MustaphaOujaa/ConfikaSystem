@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Wrench, 
   Plus, 
@@ -14,7 +14,9 @@ import {
   DollarSign,
   TrendingUp,
   Package,
-  Check
+  Check,
+  Calendar,
+  X
 } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/authSlice';
@@ -26,6 +28,7 @@ import {
 } from '../api/apiSlice';
 import ReparationModal from '../components/reparations/ReparationModal';
 import PrintableBonReparation from '../components/reparations/PrintableBonReparation';
+import Pagination from '../components/common/Pagination';
 
 export default function ReparationsPage() {
   const user = useSelector(selectCurrentUser);
@@ -33,23 +36,35 @@ export default function ReparationsPage() {
 
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('');
 
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingReparation, setEditingReparation] = useState(null);
   const [printingReparation, setPrintingReparation] = useState(null);
 
-  // Queries
-  const { data: reparationsData, isLoading, refetch } = useGetReparationsQuery({
+  // Debounce search to query backend with delay and avoid race conditions
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Queries - Backend handles search, status, date, and pagination
+  const { data: reparationsData, isLoading, isFetching, refetch } = useGetReparationsQuery({
     page,
-    search: searchTerm,
-    status: statusFilter,
+    search: debouncedSearch.trim() || undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    date: dateFilter || undefined,
     per_page: 15,
   });
 
   const { data: statsData } = useGetReparationStatsQuery(undefined, {
-    pollingInterval: 20000,
+    pollingInterval: 25000,
   });
 
   const [updateStatus] = useUpdateReparationStatusMutation();
@@ -57,6 +72,7 @@ export default function ReparationsPage() {
 
   const reparationsList = reparationsData?.data || [];
   const totalPages = reparationsData?.last_page || 1;
+  const totalItems = reparationsData?.total || 0;
 
   const handleOpenCreate = () => {
     setEditingReparation(null);
@@ -116,23 +132,6 @@ export default function ReparationsPage() {
     );
 
     window.open(`https://wa.me/${formattedPhone}?text=${message}`, '_blank');
-  };
-
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'recu':
-        return <span style={{ ...styles.badge, backgroundColor: '#fef3c7', color: '#b45309' }}>Reçu (En attente)</span>;
-      case 'en_cours':
-        return <span style={{ ...styles.badge, backgroundColor: '#e0f2fe', color: '#0369a1' }}>En cours</span>;
-      case 'pret':
-        return <span style={{ ...styles.badge, backgroundColor: '#dcfce7', color: '#15803d' }}>Prêt</span>;
-      case 'livre':
-        return <span style={{ ...styles.badge, backgroundColor: '#f3f4f6', color: '#4b5563' }}>Livré</span>;
-      case 'annule':
-        return <span style={{ ...styles.badge, backgroundColor: '#fee2e2', color: '#b91c1c' }}>Annulé</span>;
-      default:
-        return <span style={styles.badge}>{status}</span>;
-    }
   };
 
   return (
@@ -220,59 +219,97 @@ export default function ReparationsPage() {
         )}
       </div>
 
-      {/* Filter & Search Bar */}
+      {/* Filter & Search Bar - Handled on Backend */}
       <div style={styles.filterSection}>
         <div style={styles.searchBox}>
           <Search size={18} color="#9ca3af" />
           <input
             type="text"
-            placeholder="Rechercher par N° Bon, client, téléphone, IMEI, modèle..."
+            placeholder="Rechercher par N° Bon, client, téléphone, IMEI, modèle, panne..."
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => setSearchTerm(e.target.value)}
             style={styles.searchInput}
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              style={styles.clearSearchBtn}
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
-        <div style={styles.filterTabs}>
-          {[
-            { id: 'all', label: 'Tous' },
-            { id: 'recu', label: 'Reçus' },
-            { id: 'en_cours', label: 'En cours' },
-            { id: 'pret', label: 'Prêts' },
-            { id: 'livre', label: 'Livrés' },
-            { id: 'annule', label: 'Annulés' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => {
-                setStatusFilter(tab.id);
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {/* Date Picker Filter */}
+          <div style={styles.dateFilterWrapper}>
+            <Calendar size={14} color="#6b7280" style={{ marginRight: '6px' }} />
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value);
                 setPage(1);
               }}
-              style={{
-                ...styles.filterTabBtn,
-                ...(statusFilter === tab.id ? styles.filterTabBtnActive : {}),
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
+              style={styles.dateFilterInput}
+            />
+            {dateFilter && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDateFilter('');
+                  setPage(1);
+                }}
+                style={styles.clearDateBtn}
+                title="Effacer la date"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Status Tabs */}
+          <div style={styles.filterTabs}>
+            {[
+              { id: 'all', label: 'Tous' },
+              { id: 'recu', label: 'Reçus' },
+              { id: 'en_cours', label: 'En cours' },
+              { id: 'pret', label: 'Prêts' },
+              { id: 'livre', label: 'Livrés' },
+              { id: 'annule', label: 'Annulés' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(tab.id);
+                  setPage(1);
+                }}
+                style={{
+                  ...styles.filterTabBtn,
+                  ...(statusFilter === tab.id ? styles.filterTabBtnActive : {}),
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Reparations Table */}
       <div style={styles.tableCard}>
-        {isLoading ? (
+        {isLoading || isFetching ? (
           <div style={styles.loadingBox}>Chargement des réparations...</div>
         ) : reparationsList.length === 0 ? (
           <div style={styles.emptyBox}>
             <Wrench size={40} color="#9ca3af" style={{ marginBottom: '12px' }} />
             <p style={{ margin: 0, fontWeight: '600', color: '#4b5563' }}>Aucune réparation trouvée</p>
             <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#9ca3af' }}>
-              Enregistrez un nouvel appareil pour générer un Bon de Réparation.
+              {searchTerm || dateFilter || statusFilter !== 'all'
+                ? 'Aucun résultat pour les critères de recherche actuels.'
+                : 'Enregistrez un nouvel appareil pour générer un Bon de Réparation.'}
             </p>
           </div>
         ) : (
@@ -457,28 +494,13 @@ export default function ReparationsPage() {
           </div>
         )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div style={styles.pagination}>
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              style={styles.pageBtn}
-            >
-              Précédent
-            </button>
-            <span style={{ fontSize: '13px', color: '#6b7280' }}>
-              Page {page} sur {totalPages}
-            </span>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              style={styles.pageBtn}
-            >
-              Suivant
-            </button>
-          </div>
-        )}
+        {/* Backend Paginated Controls */}
+        <Pagination
+          currentPage={page}
+          lastPage={totalPages}
+          total={totalItems}
+          onPageChange={(p) => setPage(p)}
+        />
       </div>
 
       {/* Create / Edit Modal */}
@@ -602,6 +624,39 @@ const styles = {
     fontSize: '13px',
     width: '100%',
   },
+  clearSearchBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#9ca3af',
+    cursor: 'pointer',
+    padding: '2px',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  dateFilterWrapper: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    border: '1px solid #d1d5db',
+    borderRadius: '8px',
+    padding: '6px 10px',
+  },
+  dateFilterInput: {
+    border: 'none',
+    outline: 'none',
+    fontSize: '12px',
+    color: '#374151',
+    fontWeight: '500',
+  },
+  clearDateBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#9ca3af',
+    cursor: 'pointer',
+    marginLeft: '4px',
+    display: 'flex',
+    alignItems: 'center',
+  },
   filterTabs: {
     display: 'flex',
     gap: '6px',
@@ -663,13 +718,6 @@ const styles = {
     borderRadius: '4px',
     letterSpacing: '0.5px',
   },
-  badge: {
-    display: 'inline-block',
-    padding: '4px 8px',
-    borderRadius: '9999px',
-    fontSize: '11px',
-    fontWeight: '700',
-  },
   statusSelect: {
     padding: '4px 8px',
     fontSize: '12px',
@@ -694,23 +742,6 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    cursor: 'pointer',
-  },
-  pagination: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 18px',
-    borderTop: '1px solid #e5e7eb',
-    backgroundColor: '#f9fafb',
-  },
-  pageBtn: {
-    padding: '6px 14px',
-    fontSize: '12px',
-    fontWeight: '600',
-    border: '1px solid #d1d5db',
-    borderRadius: '6px',
-    backgroundColor: '#ffffff',
     cursor: 'pointer',
   },
   loadingBox: {
