@@ -186,7 +186,8 @@ class ReportController extends Controller
                 'total_reparations_cost' => round($totalYearlyRepCost, 2),
                 'total_reparations_profit' => round($totalYearlyRepProfit, 2),
                 'total_reparations_count' => $totalYearlyRepCount,
-                // Grand total profit combined
+                // Grand total combined figures
+                'total_combined_revenue' => round($totalYearlySales + $totalYearlyRepRevenue, 2),
                 'total_profit' => round($totalYearlyCombinedProfit, 2),
             ],
             'monthly' => $monthlyData,
@@ -282,10 +283,11 @@ class ReportController extends Controller
         $reparationsToday = Reparation::where(function ($q) use ($targetDateStr) {
                 $q->whereDate('date_retrait', $targetDateStr)
                   ->orWhere(function ($sub) use ($targetDateStr) {
-                      $sub->whereDate('date_depot', $targetDateStr)
-                          ->where('status', '!=', 'annule');
+                      $sub->whereNull('date_retrait')
+                          ->whereDate('date_depot', $targetDateStr);
                   });
             })
+            ->where('status', '!=', 'annule')
             ->with('parts')
             ->get();
 
@@ -306,10 +308,23 @@ class ReportController extends Controller
             'distinct_products_count' => count($productsSold),
             'gross_sales_revenue' => round($totalSalesRevenue, 2),
             'total_refunds_today' => round($totalRefundsToday, 2),
+            // Magasin Sales figures (Separated)
             'total_sales_revenue' => round($netSalesRevenue, 2),
+            'sales_revenue' => round($netSalesRevenue, 2),
             'total_cost_of_goods_sold' => round($netCostOfGoodsSold, 2),
-            'net_profit_today' => round($grandTotalProfit, 2), // combined profit
             'sales_profit_today' => round($netSalesProfit, 2),
+            'sales_profit' => round($netSalesProfit, 2),
+            // Atelier Reparations figures (Separated)
+            'reparations_revenue_today' => round($reparationsRevenueToday, 2),
+            'reparations_revenue' => round($reparationsRevenueToday, 2),
+            'reparations_cost_today' => round($reparationsCostToday, 2),
+            'reparations_profit_today' => round($reparationsProfitToday, 2),
+            'reparations_profit' => round($reparationsProfitToday, 2),
+            'reparations_count_today' => $reparationsCountToday,
+            // Consolidated Totals
+            'grand_total_revenue' => round($grandTotalRevenue, 2),
+            'grand_total_profit' => round($grandTotalProfit, 2),
+            'net_profit_today' => round($grandTotalProfit, 2), // combined profit for compatibility
             'currency' => 'MAD',
             'products_sold' => $productsSold,
             'returns_summary' => $returnsToday->map(fn ($r) => [

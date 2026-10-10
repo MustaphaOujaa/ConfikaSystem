@@ -129,44 +129,64 @@ export default function DashboardPage() {
           </div>
 
           <div style={styles.dailyGrid}>
+            {/* 1. Magasin: CA Ventes */}
             <div style={styles.dailyItem}>
-              <div style={styles.dailyLabel}>Produits Vendus le {selectedDate}</div>
-              <div style={styles.dailyVal('#111827')}>
-                {loadingDaily ? '...' : `${dailyReport?.products_sold_count || 0} Unités`}
-              </div>
-              <div style={styles.dailySub}>Nombre d'articles encaissés cette journée</div>
-            </div>
-
-            <div style={styles.dailyItem}>
-              <div style={styles.dailyLabel}>Chiffre d'Affaires Net ({selectedDate})</div>
-              <div style={styles.dailyVal('#16a34a')}>
+              <div style={styles.dailyLabel}>CA Ventes Magasin ({selectedDate})</div>
+              <div style={styles.dailyVal('#2563eb')}>
                 {loadingDaily ? '...' : `${Number(dailyReport?.total_sales_revenue || 0).toFixed(2)} MAD`}
               </div>
               <div style={styles.dailySub}>
-                {dailyReport?.total_refunds_today > 0 ? (
-                  <span>Brut: {Number(dailyReport?.gross_sales_revenue || 0).toFixed(2)} MAD</span>
-                ) : (
-                  <span>Revenu brut des ventes enregistrées</span>
-                )}
+                {dailyReport?.products_sold_count || 0} article{(dailyReport?.products_sold_count || 0) > 1 ? 's' : ''} encaissé{(dailyReport?.products_sold_count || 0) > 1 ? 's' : ''} ({dailyReport?.transactions_count || 0} vent.)
               </div>
             </div>
 
+            {/* 1. Magasin: Bénéfice Ventes */}
             <div style={styles.dailyItem}>
-              <div style={styles.dailyLabel}>Retours & Remboursements</div>
-              <div style={styles.dailyVal(dailyReport?.total_refunds_today > 0 ? '#dc2626' : '#6b7280')}>
-                {loadingDaily ? '...' : `${dailyReport?.total_refunds_today > 0 ? '-' : ''}${Number(dailyReport?.total_refunds_today || 0).toFixed(2)} MAD`}
+              <div style={styles.dailyLabel}>Bénéfice Ventes Magasin</div>
+              <div style={styles.dailyVal('#16a34a')}>
+                {loadingDaily ? '...' : `+ ${Number(dailyReport?.sales_profit_today ?? dailyReport?.sales_profit ?? 0).toFixed(2)} MAD`}
+              </div>
+              <div style={styles.dailySub}>Ventes nettes moins coût marchandises</div>
+            </div>
+
+            {/* 2. Atelier: CA Réparations */}
+            <div style={styles.dailyItem}>
+              <div style={styles.dailyLabel}>CA Atelier Réparations</div>
+              <div style={styles.dailyVal('#0284c7')}>
+                {loadingDaily ? '...' : `${Number(dailyReport?.reparations_revenue_today ?? dailyReport?.reparations?.revenue ?? 0).toFixed(2)} MAD`}
               </div>
               <div style={styles.dailySub}>
-                {dailyReport?.returns_count || 0} retour{(dailyReport?.returns_count || 0) > 1 ? 's' : ''} enregistré{(dailyReport?.returns_count || 0) > 1 ? 's' : ''}
+                {dailyReport?.reparations_count_today ?? dailyReport?.reparations?.count ?? 0} réparation{(dailyReport?.reparations_count_today ?? dailyReport?.reparations?.count ?? 0) > 1 ? 's' : ''} clôturée{(dailyReport?.reparations_count_today ?? dailyReport?.reparations?.count ?? 0) > 1 ? 's' : ''}
               </div>
             </div>
 
+            {/* 2. Atelier: Bénéfice Réparations */}
             <div style={styles.dailyItem}>
-              <div style={styles.dailyLabel}>Bénéfice Net du {selectedDate} (Gain)</div>
-              <div style={styles.dailyVal('#dc2626')}>
-                {loadingDaily ? '...' : `+ ${Number(dailyReport?.net_profit_today || 0).toFixed(2)} MAD`}
+              <div style={styles.dailyLabel}>Bénéfice Réparations (Gain)</div>
+              <div style={styles.dailyVal('#16a34a')}>
+                {loadingDaily ? '...' : `+ ${Number(dailyReport?.reparations_profit_today ?? dailyReport?.reparations?.profit ?? 0).toFixed(2)} MAD`}
               </div>
-              <div style={styles.dailySub}>Ventes nettes moins Coût Marchandises</div>
+              <div style={styles.dailySub}>
+                Coût pièces : {Number(dailyReport?.reparations_cost_today ?? dailyReport?.reparations?.cost ?? 0).toFixed(2)} MAD
+              </div>
+            </div>
+
+            {/* 3. Consolidé: CA Total */}
+            <div style={{ ...styles.dailyItem, backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }}>
+              <div style={{ ...styles.dailyLabel, color: '#0369a1' }}>CA Total Global (Journée)</div>
+              <div style={styles.dailyVal('#0369a1')}>
+                {loadingDaily ? '...' : `${Number(dailyReport?.grand_total_revenue || 0).toFixed(2)} MAD`}
+              </div>
+              <div style={styles.dailySub}>Ventes magasin + Atelier réparations</div>
+            </div>
+
+            {/* 3. Consolidé: Bénéfice Net Total */}
+            <div style={{ ...styles.dailyItem, backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}>
+              <div style={{ ...styles.dailyLabel, color: '#15803d' }}>Bénéfice Net Total Combiné</div>
+              <div style={styles.dailyVal('#15803d')}>
+                {loadingDaily ? '...' : `+ ${Number(dailyReport?.grand_total_profit || 0).toFixed(2)} MAD`}
+              </div>
+              <div style={styles.dailySub}>Gain total réalisé par le commerce</div>
             </div>
           </div>
 
@@ -260,11 +280,11 @@ export default function DashboardPage() {
                     {productsSoldList.length > 0 && (
                       <tfoot>
                         <tr style={styles.tfootRow}>
-                          <td colSpan="4" style={{ ...styles.td, fontWeight: '800', textAlign: 'right' }}>TOTAUX DU JOUR :</td>
+                          <td colSpan="4" style={{ ...styles.td, fontWeight: '800', textAlign: 'right' }}>TOTAL VENTES DU JOUR :</td>
                           <td style={{ ...styles.td, textAlign: 'center', fontWeight: '800' }}>{dailyReport?.products_sold_count || 0}</td>
                           <td style={styles.td}></td>
                           <td style={{ ...styles.td, textAlign: 'right', fontWeight: '800' }}>{Number(dailyReport?.total_sales_revenue || 0).toFixed(2)} MAD</td>
-                          <td style={{ ...styles.td, textAlign: 'right', fontWeight: '800', color: '#16a34a' }}>+ {Number(dailyReport?.net_profit_today || 0).toFixed(2)} MAD</td>
+                          <td style={{ ...styles.td, textAlign: 'right', fontWeight: '800', color: '#16a34a' }}>+ {Number(dailyReport?.sales_profit_today ?? dailyReport?.sales_profit ?? 0).toFixed(2)} MAD</td>
                         </tr>
                       </tfoot>
                     )}

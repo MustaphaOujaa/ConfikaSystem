@@ -102,28 +102,29 @@
         .kpi-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-bottom: 24px;
+            gap: 10px;
+            margin-bottom: 12px;
         }
 
         .kpi-card {
             background-color: #f9fafb;
             border: 1px solid #e5e7eb;
             border-radius: 6px;
-            padding: 12px 14px;
+            padding: 10px 12px;
             text-align: center;
         }
 
         .kpi-label {
-            font-size: 11px;
+            font-size: 10.5px;
             color: #6b7280;
             text-transform: uppercase;
-            font-weight: 600;
-            margin-bottom: 4px;
+            font-weight: 700;
+            margin-bottom: 3px;
+            letter-spacing: 0.3px;
         }
 
         .kpi-val {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 800;
             color: #111827;
         }
@@ -144,6 +145,24 @@
 
         .kpi-card-revenue .kpi-val {
             color: #2563eb;
+        }
+
+        .kpi-card-rep {
+            background-color: #f0f9ff;
+            border-color: #bae6fd;
+        }
+
+        .kpi-card-rep .kpi-val {
+            color: #0284c7;
+        }
+
+        .kpi-card-global {
+            background-color: #faf5ff;
+            border-color: #e9d5ff;
+        }
+
+        .kpi-card-global .kpi-val {
+            color: #7e22ce;
         }
 
         /* Section Title */
@@ -330,34 +349,67 @@
             </div>
         </div>
 
-        <!-- KPI Summary Cards -->
-        <div class="kpi-grid">
-            <div class="kpi-card">
-                <div class="kpi-label">Articles Vendus</div>
-                <div class="kpi-val">{{ $products_sold_count ?? 0 }}</div>
+        <!-- KPI Summary Cards (Separated Ventes / Réparations / Total) -->
+        <div style="margin-bottom: 20px;">
+            <div style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px;">
+                1. Ventes Magasin (POS)
+            </div>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-label">Articles Vendus</div>
+                    <div class="kpi-val">{{ $products_sold_count ?? 0 }}</div>
+                </div>
+
+                <div class="kpi-card kpi-card-revenue">
+                    <div class="kpi-label">CA Ventes Net</div>
+                    <div class="kpi-val">{{ number_format($total_sales_revenue, 2) }} {{ $currency }}</div>
+                </div>
+
+                <div class="kpi-card kpi-card-profit">
+                    <div class="kpi-label">Bénéfice Ventes (Gain)</div>
+                    <div class="kpi-val">+{{ number_format($sales_profit_today ?? $sales_profit ?? 0, 2) }} {{ $currency }}</div>
+                </div>
             </div>
 
-            <div class="kpi-card kpi-card-revenue">
-                <div class="kpi-label">Chiffre d'Affaires Net</div>
-                <div class="kpi-val">{{ number_format($total_sales_revenue, 2) }} {{ $currency }}</div>
+            <div style="font-size: 11px; font-weight: 700; color: #0284c7; text-transform: uppercase; margin: 12px 0 6px 0; letter-spacing: 0.5px;">
+                2. Atelier Réparations
+            </div>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-label">Réparations Clôturées</div>
+                    <div class="kpi-val">{{ $reparations_count_today ?? $reparations['count'] ?? 0 }}</div>
+                </div>
+
+                <div class="kpi-card kpi-card-rep">
+                    <div class="kpi-label">CA Réparations</div>
+                    <div class="kpi-val">{{ number_format($reparations_revenue_today ?? $reparations['revenue'] ?? 0, 2) }} {{ $currency }}</div>
+                </div>
+
+                <div class="kpi-card kpi-card-profit">
+                    <div class="kpi-label">Bénéfice Réparations</div>
+                    <div class="kpi-val">+{{ number_format($reparations_profit_today ?? $reparations['profit'] ?? 0, 2) }} {{ $currency }}</div>
+                </div>
             </div>
 
-            @if(($total_refunds_today ?? 0) > 0)
-            <div class="kpi-card" style="border-left: 4px solid #dc2626;">
-                <div class="kpi-label">Retours & Remb.</div>
-                <div class="kpi-val" style="color: #dc2626;">-{{ number_format($total_refunds_today, 2) }} {{ $currency }}</div>
+            <div style="font-size: 11px; font-weight: 700; color: #7e22ce; text-transform: uppercase; margin: 12px 0 6px 0; letter-spacing: 0.5px;">
+                3. Total Consolidé Journalier
             </div>
-            @endif
+            <div class="kpi-grid" style="grid-template-columns: repeat(2, 1fr);">
+                <div class="kpi-card kpi-card-global">
+                    <div class="kpi-label">Chiffre d'Affaires Total (Ventes + Réparations)</div>
+                    <div class="kpi-val">{{ number_format($grand_total_revenue, 2) }} {{ $currency }}</div>
+                </div>
 
-            <div class="kpi-card kpi-card-profit">
-                <div class="kpi-label">Bénéfice Net (Gain)</div>
-                <div class="kpi-val">+{{ number_format($net_profit_today, 2) }} {{ $currency }}</div>
+                <div class="kpi-card kpi-card-profit" style="border-width: 2px;">
+                    <div class="kpi-label">Bénéfice Net Total Combiné</div>
+                    <div class="kpi-val" style="font-size: 18px;">+{{ number_format($grand_total_profit, 2) }} {{ $currency }}</div>
+                </div>
             </div>
         </div>
 
         <!-- Sold Products Breakdown Table (Multi-Page Capable) -->
         <div class="section-title">
-            <span>Détail des Produits Vendus</span>
+            <span>Détail des Produits Vendus (Magasin)</span>
             <span class="section-count">{{ count($products_sold) }} Référence(s) distincte(s)</span>
         </div>
 
@@ -370,7 +422,7 @@
                     <th style="text-align: center;">Qté</th>
                     <th style="text-align: right;">Prix Unit.</th>
                     <th style="text-align: right;">Total Vente</th>
-                    <th style="text-align: right;">Gain Net</th>
+                    <th style="text-align: right;">Gain Vente</th>
                 </tr>
             </thead>
             <tbody>
@@ -398,15 +450,65 @@
             @if(count($products_sold) > 0)
             <tfoot>
                 <tr class="totals-row">
-                    <td colspan="3" style="text-align: right;">TOTAUX DU JOUR :</td>
+                    <td colspan="3" style="text-align: right;">TOTAL VENTES MAGASIN :</td>
                     <td class="col-qty" style="text-align: center;">{{ $products_sold_count }}</td>
                     <td></td>
                     <td class="col-total">{{ number_format($total_sales_revenue, 2) }} {{ $currency }}</td>
-                    <td class="col-profit">+{{ number_format($net_profit_today, 2) }} {{ $currency }}</td>
+                    <td class="col-profit">+{{ number_format($sales_profit_today ?? $sales_profit ?? 0, 2) }} {{ $currency }}</td>
                 </tr>
             </tfoot>
             @endif
         </table>
+
+        @if(!empty($reparations['items']) && count($reparations['items']) > 0)
+        <!-- Daily Reparations Breakdown -->
+        <div class="section-title" style="color: #0284c7; border-top: 1px dashed #d1d5db; padding-top: 16px; margin-top: 24px;">
+            <span>Détail des Réparations de la Journée ({{ count($reparations['items']) }})</span>
+            <span class="section-count" style="color: #0284c7; font-weight: bold;">
+                CA : {{ number_format($reparations_revenue_today ?? $reparations['revenue'], 2) }} {{ $currency }} • Gain : +{{ number_format($reparations_profit_today ?? $reparations['profit'], 2) }} {{ $currency }}
+            </span>
+        </div>
+
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th class="col-index">#</th>
+                    <th>N° Bon</th>
+                    <th>Client / Téléphone</th>
+                    <th>Appareil</th>
+                    <th>Statut</th>
+                    <th style="text-align: right;">Coût Pièces</th>
+                    <th style="text-align: right;">Tarif (CA)</th>
+                    <th style="text-align: right;">Gain Net</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($reparations['items'] as $idx => $rep)
+                <tr>
+                    <td class="col-index">{{ $idx + 1 }}</td>
+                    <td style="font-weight: 700; color: #0284c7;">{{ $rep['ticket_number'] ?? ('REP-' . $rep['id']) }}</td>
+                    <td>
+                        <div style="font-weight: 600;">{{ $rep['client_name'] }}</div>
+                        <div style="font-size: 10.5px; color: #6b7280;">{{ $rep['client_phone'] }}</div>
+                    </td>
+                    <td>{{ $rep['device'] ?: '—' }}</td>
+                    <td><span style="font-size: 11px; text-transform: uppercase;">{{ str_replace('_', ' ', $rep['status']) }}</span></td>
+                    <td style="text-align: right; color: #dc2626;">{{ number_format($rep['cout_pieces'], 2) }}</td>
+                    <td style="text-align: right; font-weight: 700;">{{ number_format($rep['total_price'], 2) }} {{ $currency }}</td>
+                    <td style="text-align: right; font-weight: 700; color: #16a34a;">+{{ number_format($rep['gain'], 2) }} {{ $currency }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+            <tfoot>
+                <tr class="totals-row">
+                    <td colspan="5" style="text-align: right;">TOTAL ATELIER RÉPARATIONS :</td>
+                    <td style="text-align: right; color: #dc2626;">{{ number_format($reparations_cost_today ?? $reparations['cost'], 2) }}</td>
+                    <td style="text-align: right;">{{ number_format($reparations_revenue_today ?? $reparations['revenue'], 2) }} {{ $currency }}</td>
+                    <td style="text-align: right; color: #16a34a;">+{{ number_format($reparations_profit_today ?? $reparations['profit'], 2) }} {{ $currency }}</td>
+                </tr>
+            </tfoot>
+        </table>
+        @endif
 
         @if(!empty($returns_summary))
         <!-- Daily Returns Breakdown -->
@@ -440,6 +542,26 @@
             </tbody>
         </table>
         @endif
+
+        <!-- Global Consolidated Financial Recap -->
+        <div style="background-color: #f8fafc; border: 2px solid #e2e8f0; border-radius: 6px; padding: 14px 18px; margin-top: 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+            <div>
+                <strong style="text-transform: uppercase; color: #1e293b; font-size: 11.5px; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">RÉCAPITULATIF FINANCIER GLOBAL DU JOUR</strong>
+                <span style="color: #64748b;">
+                    Ventes Magasin : CA {{ number_format($total_sales_revenue, 2) }} {{ $currency }} (Gain : +{{ number_format($sales_profit_today ?? $sales_profit ?? 0, 2) }} {{ $currency }})
+                    <br>
+                    Atelier Réparations : CA {{ number_format($reparations_revenue_today ?? $reparations['revenue'] ?? 0, 2) }} {{ $currency }} (Gain : +{{ number_format($reparations_profit_today ?? $reparations['profit'] ?? 0, 2) }} {{ $currency }})
+                </span>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size: 16px; font-weight: 800; color: #1e293b;">
+                    CA Total : {{ number_format($grand_total_revenue, 2) }} {{ $currency }}
+                </div>
+                <div style="font-size: 16px; font-weight: 800; color: #16a34a; margin-top: 3px;">
+                    Gain Net Total : +{{ number_format($grand_total_profit, 2) }} {{ $currency }}
+                </div>
+            </div>
+        </div>
 
         <!-- Signatures & Verification -->
         <div class="report-footer">

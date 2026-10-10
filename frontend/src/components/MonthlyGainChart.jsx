@@ -53,8 +53,9 @@ export default function MonthlyGainChart() {
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
-      const margin = data.total_sold > 0 
-        ? ((data.net_profit / data.total_sold) * 100).toFixed(1) 
+      const combinedRev = Number(data.total_combined_revenue || data.total_sold || 0);
+      const margin = combinedRev > 0 
+        ? ((data.net_profit / combinedRev) * 100).toFixed(1) 
         : 0;
 
       return (
@@ -62,7 +63,7 @@ export default function MonthlyGainChart() {
           <div style={styles.tooltipHeader}>{data.month_label}</div>
           <div style={styles.tooltipRow('#2563eb')}>
             <span>Ventes Magasin (CA):</span>
-            <strong>{Number(data.total_sold).toFixed(2)} MAD</strong>
+            <strong>{Number(data.sales_revenue ?? data.total_sold).toFixed(2)} MAD</strong>
           </div>
           {Number(data.reparations_revenue || 0) > 0 && (
             <div style={styles.tooltipRow('#0284c7')}>
@@ -70,19 +71,27 @@ export default function MonthlyGainChart() {
               <strong>{Number(data.reparations_revenue).toFixed(2)} MAD</strong>
             </div>
           )}
-          <div style={styles.tooltipRow(data.net_profit >= 0 ? '#16a34a' : '#dc2626')}>
-            <span>Gain Net Total:</span>
-            <strong>{formatGain(data.net_profit, 2)}</strong>
+          <div style={{ ...styles.tooltipRow('#1e293b'), borderTop: '1px dashed #e5e7eb', paddingTop: '4px', marginTop: '4px', fontWeight: '700' }}>
+            <span>CA Total Global:</span>
+            <strong>{combinedRev.toFixed(2)} MAD</strong>
+          </div>
+          <div style={{ ...styles.tooltipRow('#16a34a'), marginTop: '6px' }}>
+            <span>Gain Ventes:</span>
+            <strong>{formatGain(data.sales_profit, 2)}</strong>
           </div>
           {Number(data.reparations_profit || 0) > 0 && (
             <div style={styles.tooltipRow('#059669')}>
-              <span>(dont Gain Réparations):</span>
+              <span>Gain Réparations:</span>
               <strong>{formatGain(data.reparations_profit, 2)}</strong>
             </div>
           )}
+          <div style={{ ...styles.tooltipRow(data.net_profit >= 0 ? '#15803d' : '#dc2626'), fontWeight: '800', borderTop: '1px solid #e5e7eb', paddingTop: '4px' }}>
+            <span>Bénéfice Net Total:</span>
+            <strong>{formatGain(data.net_profit, 2)}</strong>
+          </div>
           <div style={styles.tooltipRow('#6b7280')}>
-            <span>Articles Vendus:</span>
-            <strong>{data.items_sold_count} unités ({data.transactions_count} vent.)</strong>
+            <span>Marge Nette Réelle:</span>
+            <strong>{margin}%</strong>
           </div>
         </div>
       );
@@ -97,8 +106,8 @@ export default function MonthlyGainChart() {
         <div style={styles.titleWrapper}>
           <BarChart3 size={20} style={{ color: '#dc2626', marginRight: '8px' }} />
           <div>
-            <h3 style={styles.title}>Évolution Mensuelle : Ventes & Gains Nets</h3>
-            <p style={styles.subtitle}>Graphique comparatif des Ventes Totales vs Bénéfice Net (Réservé Admin)</p>
+            <h3 style={styles.title}>Évolution Mensuelle : Chiffre d'Affaires & Gains Nets</h3>
+            <p style={styles.subtitle}>Graphique comparatif du Chiffre d'Affaires Total vs Bénéfice Net (Réservé Admin)</p>
           </div>
         </div>
 
@@ -123,40 +132,42 @@ export default function MonthlyGainChart() {
 
       {/* KPI Cards Bar */}
       <div style={styles.kpiRow}>
-        <div style={styles.kpiBox('#f0f9ff', '#0284c7')}>
-          <div style={styles.kpiLabel}>Total Ventes ({selectedYear})</div>
-          <div style={styles.kpiValue('#0369a1')}>
+        <div style={styles.kpiBox('#eff6ff', '#bfdbfe')}>
+          <div style={styles.kpiLabel}>CA Ventes Magasin ({selectedYear})</div>
+          <div style={styles.kpiValue('#1d4ed8')}>
             {isLoading ? '...' : `${Number(summary.total_sales || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MAD`}
           </div>
-          <div style={styles.kpiSub}>{summary.total_transactions || 0} transactions au total</div>
+          <div style={styles.kpiSub}>
+            Gain: {formatGain(summary.total_sales_profit, 0)} • {summary.total_transactions || 0} vent.
+          </div>
         </div>
 
-        <div style={styles.kpiBox('#f0fdf4', '#16a34a')}>
-          <div style={styles.kpiLabel}>Gain Net Total ({selectedYear})</div>
+        <div style={styles.kpiBox('#f0f9ff', '#bae6fd')}>
+          <div style={styles.kpiLabel}>CA Atelier Réparations ({selectedYear})</div>
+          <div style={styles.kpiValue('#0284c7')}>
+            {isLoading ? '...' : `${Number(summary.total_reparations_revenue || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MAD`}
+          </div>
+          <div style={styles.kpiSub}>
+            Gain: {formatGain(summary.total_reparations_profit, 0)} • {summary.total_reparations_count || 0} rép.
+          </div>
+        </div>
+
+        <div style={styles.kpiBox('#faf5ff', '#e9d5ff')}>
+          <div style={styles.kpiLabel}>CA Total Global ({selectedYear})</div>
+          <div style={styles.kpiValue('#7e22ce')}>
+            {isLoading ? '...' : `${Number(summary.total_combined_revenue || ((summary.total_sales || 0) + (summary.total_reparations_revenue || 0))).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MAD`}
+          </div>
+          <div style={styles.kpiSub}>Ventes + Réparations cumulées</div>
+        </div>
+
+        <div style={styles.kpiBox('#f0fdf4', '#bbf7d0')}>
+          <div style={styles.kpiLabel}>Bénéfice Net Total ({selectedYear})</div>
           <div style={styles.kpiValue('#15803d')}>
             {isLoading ? '...' : formatGain(summary.total_profit, 2)}
           </div>
           <div style={styles.kpiSub}>
-            {summary.total_reparations_profit > 0 
-              ? `Ventes: ${formatGain(summary.total_sales_profit, 0)} • Réparations: ${formatGain(summary.total_reparations_profit, 0)}`
-              : "Bénéfice accumulé sur l'année"}
+            {bestMonth && bestMonth.net_profit > 0 ? `Record: ${bestMonth.month_name} (${formatGain(bestMonth.net_profit, 0)})` : "Bénéfice accumulé"}
           </div>
-        </div>
-
-        <div style={styles.kpiBox('#fefce8', '#ca8a04')}>
-          <div style={styles.kpiLabel}>Moyenne de Gain Mensuel</div>
-          <div style={styles.kpiValue('#a16207')}>
-            {isLoading ? '...' : `~ ${formatGain(averageMonthlyProfit, 2)} / mois`}
-          </div>
-          <div style={styles.kpiSub}>Moyenne calculée sur 12 mois</div>
-        </div>
-
-        <div style={styles.kpiBox('#faf5ff', '#9333ea')}>
-          <div style={styles.kpiLabel}>Meilleur Mois</div>
-          <div style={styles.kpiValue('#7e22ce')}>
-            {isLoading ? '...' : bestMonth && bestMonth.net_profit > 0 ? `${bestMonth.month_name} (${formatGain(bestMonth.net_profit, 0)})` : '-'}
-          </div>
-          <div style={styles.kpiSub}>Record de profit de l'année</div>
         </div>
       </div>
 
@@ -186,13 +197,13 @@ export default function MonthlyGainChart() {
                 height={36} 
                 formatter={(value) => (
                   <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>
-                    {value === 'total_sold' ? 'Total Vendu (Ventes CA)' : 'Gain Net (Bénéfice)'}
+                    {value === 'total_combined_revenue' ? "Chiffre d'Affaires Total (Ventes + Rép.)" : "Bénéfice Net Total (Gain)"}
                   </span>
                 )}
               />
               <Bar 
-                dataKey="total_sold" 
-                name="total_sold" 
+                dataKey="total_combined_revenue" 
+                name="total_combined_revenue" 
                 fill="#3b82f6" 
                 radius={[4, 4, 0, 0]} 
                 maxBarSize={45} 

@@ -11,8 +11,6 @@ import {
   CheckCircle, 
   AlertTriangle, 
   Phone,
-  DollarSign,
-  TrendingUp,
   Package,
   Check,
   Calendar,
@@ -213,38 +211,6 @@ export default function ReparationsPage() {
           <div style={{ ...styles.cardValue, color: '#16a34a' }}>{statsData?.pret || 0}</div>
           <div style={styles.cardSub}>En attente du client</div>
         </div>
-
-        {/* Admin Financial Stats Cards */}
-        {isAdmin && statsData?.financials && (
-          <>
-            <div style={{ ...styles.card, borderLeft: '4px solid #0284c7' }}>
-              <div style={styles.cardHeader}>
-                <span style={styles.cardTitle}>Chiffre d'Affaires</span>
-                <DollarSign size={18} color="#0284c7" />
-              </div>
-              <div style={styles.cardValue}>{statsData.financials.total_revenue} DH</div>
-              <div style={styles.cardSub}>Facturation réparations</div>
-            </div>
-
-            <div style={{ ...styles.card, borderLeft: '4px solid #ef4444' }}>
-              <div style={styles.cardHeader}>
-                <span style={styles.cardTitle}>Coût des Pièces</span>
-                <Wrench size={18} color="#ef4444" />
-              </div>
-              <div style={{ ...styles.cardValue, color: '#dc2626' }}>{statsData.financials.total_cost} DH</div>
-              <div style={styles.cardSub}>Achat pièces de rechange</div>
-            </div>
-
-            <div style={{ ...styles.card, borderLeft: '4px solid #16a34a' }}>
-              <div style={styles.cardHeader}>
-                <span style={styles.cardTitle}>Gain Net Réparations</span>
-                <TrendingUp size={18} color="#16a34a" />
-              </div>
-              <div style={{ ...styles.cardValue, color: '#16a34a' }}>{statsData.financials.total_profit} DH</div>
-              <div style={styles.cardSub}>Bénéfice net d'atelier</div>
-            </div>
-          </>
-        )}
       </div>
 
       {/* Filter & Search Bar - Handled on Backend */}
