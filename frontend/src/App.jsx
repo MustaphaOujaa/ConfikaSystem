@@ -17,34 +17,52 @@ import ReparationsPage from './pages/ReparationsPage';
 export default function App() {
   const user = useSelector(selectCurrentUser);
   const isAdmin = user?.role === 'admin';
+  const isReparateur = user?.role === 'reparateur';
+
+  const defaultHome = isAdmin ? '/' : isReparateur ? '/reparations' : '/pos';
 
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       
       <Route path="/" element={<MainLayout />}>
-        {/* If cashier, index redirects to /pos; if admin, renders Dashboard */}
+        {/* If reparateur, index redirects to /reparations; if cashier, to /pos; if admin, renders Dashboard */}
         <Route 
           index 
-          element={isAdmin ? <DashboardPage /> : <Navigate to="/pos" replace />} 
+          element={isAdmin ? <DashboardPage /> : <Navigate to={defaultHome} replace />} 
         />
-        <Route path="products" element={<ProductsPage />} />
-        <Route path="categories" element={<CategoriesPage />} />
-        <Route path="pos" element={<PosPage />} />
-        <Route path="transactions" element={<TransactionsPage />} />
-        <Route path="returns" element={<ReturnsPage />} />
+        <Route 
+          path="products" 
+          element={!isReparateur ? <ProductsPage /> : <Navigate to="/reparations" replace />} 
+        />
+        <Route 
+          path="categories" 
+          element={!isReparateur ? <CategoriesPage /> : <Navigate to="/reparations" replace />} 
+        />
+        <Route 
+          path="pos" 
+          element={!isReparateur ? <PosPage /> : <Navigate to="/reparations" replace />} 
+        />
+        <Route 
+          path="transactions" 
+          element={!isReparateur ? <TransactionsPage /> : <Navigate to="/reparations" replace />} 
+        />
+        <Route 
+          path="returns" 
+          element={!isReparateur ? <ReturnsPage /> : <Navigate to="/reparations" replace />} 
+        />
         <Route path="reparations" element={<ReparationsPage />} />
         <Route 
           path="cashiers" 
-          element={isAdmin ? <CashiersPage /> : <Navigate to="/pos" replace />} 
+          element={isAdmin ? <CashiersPage /> : <Navigate to={defaultHome} replace />} 
         />
         <Route 
           path="security" 
-          element={isAdmin ? <SecurityPage /> : <Navigate to="/pos" replace />} 
+          element={isAdmin ? <SecurityPage /> : <Navigate to={defaultHome} replace />} 
         />
       </Route>
 
-      <Route path="*" element={<Navigate to={isAdmin ? "/" : "/pos"} replace />} />
+      <Route path="*" element={<Navigate to={defaultHome} replace />} />
     </Routes>
   );
 }

@@ -1,17 +1,21 @@
 import React from 'react';
 import { useLocation, Link } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { AlertCircle, ShoppingCart, Menu } from 'lucide-react';
 import { useGetLowStockAlertsQuery } from '../../api/apiSlice';
+import { selectCurrentUser } from '../../store/authSlice';
 
 export default function Navbar({ onToggleSidebar }) {
   const location = useLocation();
+  const user = useSelector(selectCurrentUser);
+  const isReparateur = user?.role === 'reparateur';
 
   const getPageTitle = (path) => {
     switch (path) {
       case '/':
         return 'Tableau de Bord';
       case '/cashiers':
-        return 'Gestion des Caissiers';
+        return 'Gestion des Comptes';
       case '/security':
         return 'Sécurité & Accès Admin';
       case '/products':
@@ -22,6 +26,10 @@ export default function Navbar({ onToggleSidebar }) {
         return 'Caisse POS';
       case '/transactions':
         return 'Transactions';
+      case '/returns':
+        return 'Gestion des Retours';
+      case '/reparations':
+        return 'Atelier Réparations';
       default:
         return 'Confika System';
     }
@@ -47,7 +55,7 @@ export default function Navbar({ onToggleSidebar }) {
       </div>
 
       <div style={styles.right}>
-        {lowStockCount > 0 && (
+        {lowStockCount > 0 && !isReparateur && (
           <Link to="/products" style={styles.alertBanner} title="Produits nécessitant un réapprovisionnement">
             <AlertCircle size={16} />
             <span className="navbar-alert-text" style={{ marginLeft: '6px' }}>
@@ -56,10 +64,12 @@ export default function Navbar({ onToggleSidebar }) {
           </Link>
         )}
 
-        <Link to="/pos" style={styles.posBtn}>
-          <ShoppingCart size={16} style={{ marginRight: '6px' }} />
-          <span>Caisse</span>
-        </Link>
+        {!isReparateur && (
+          <Link to="/pos" style={styles.posBtn}>
+            <ShoppingCart size={16} style={{ marginRight: '6px' }} />
+            <span>Caisse</span>
+          </Link>
+        )}
       </div>
     </header>
   );

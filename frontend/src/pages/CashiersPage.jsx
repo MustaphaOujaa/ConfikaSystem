@@ -11,7 +11,10 @@ import {
   User as UserIcon, 
   Mail, 
   Key, 
-  ShieldAlert 
+  ShieldAlert,
+  Shield,
+  Wrench,
+  ShoppingCart
 } from 'lucide-react';
 import { 
   useGetCashiersQuery, 
@@ -35,6 +38,7 @@ export default function CashiersPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('caissier');
   const [formError, setFormError] = useState('');
   const [pageNotification, setPageNotification] = useState('');
 
@@ -48,11 +52,13 @@ export default function CashiersPage() {
     setName('');
     setEmail('');
     setPassword('');
+    setRole('caissier');
     setFormError('');
   };
 
   const handleOpenAddModal = () => {
     resetForm();
+    setRole('caissier');
     setIsAddModalOpen(true);
   };
 
@@ -61,6 +67,7 @@ export default function CashiersPage() {
     setEditingCashier(c);
     setName(c.name);
     setEmail(c.email);
+    setRole(c.role || 'caissier');
     setPassword('');
   };
 
@@ -69,10 +76,11 @@ export default function CashiersPage() {
     setFormError('');
 
     try {
-      await createCashier({ name, email, password }).unwrap();
+      await createCashier({ name, email, password, role }).unwrap();
       setIsAddModalOpen(false);
       resetForm();
-      setPageNotification('Nouveau compte caissier créé avec succès !');
+      const roleLabel = role === 'reparateur' ? 'Réparateur' : 'Caissier';
+      setPageNotification(`Nouveau compte (${roleLabel}) créé avec succès !`);
       setTimeout(() => setPageNotification(''), 4000);
     } catch (err) {
       setFormError(err?.data?.errors?.email?.[0] || err?.data?.message || 'Erreur lors de la création du compte.');
@@ -84,14 +92,14 @@ export default function CashiersPage() {
     setFormError('');
 
     try {
-      const payload = { id: editingCashier.id, name, email };
+      const payload = { id: editingCashier.id, name, email, role };
       if (password.trim()) {
         payload.password = password;
       }
       await updateCashier(payload).unwrap();
       setEditingCashier(null);
       resetForm();
-      setPageNotification('Identifiants du caissier mis à jour avec succès !');
+      setPageNotification('Informations du compte mises à jour avec succès !');
       setTimeout(() => setPageNotification(''), 4000);
     } catch (err) {
       setFormError(err?.data?.errors?.email?.[0] || err?.data?.message || 'Erreur lors de la mise à jour.');
@@ -120,9 +128,9 @@ export default function CashiersPage() {
             <Users size={26} color="#dc2626" />
           </div>
           <div>
-            <h2 style={styles.bannerTitle}>Gestion des Caissiers</h2>
+            <h2 style={styles.bannerTitle}>Gestion des Comptes (Caissiers & Réparateurs)</h2>
             <p style={styles.bannerSubtitle}>
-              Gérez les accès aux postes d'encaissement et POS (création & mise à jour sans OTP)
+              Gérez les accès aux postes de vente (POS) et à l'atelier de réparation (création & mise à jour sans OTP)
             </p>
           </div>
         </div>
@@ -133,7 +141,7 @@ export default function CashiersPage() {
           type="button"
         >
           <UserPlus size={17} style={{ marginRight: '8px' }} />
-          <span>Nouveau Caissier</span>
+          <span>Nouveau Compte</span>
         </button>
       </div>
 
@@ -160,27 +168,27 @@ export default function CashiersPage() {
             />
           </div>
           <div style={styles.countBadge}>
-            <strong>{filteredCashiers.length}</strong> caissier{filteredCashiers.length > 1 ? 's' : ''}
+            <strong>{filteredCashiers.length}</strong> compte{filteredCashiers.length > 1 ? 's' : ''}
           </div>
         </div>
 
         {isLoading ? (
-          <div style={styles.loading}>Chargement des caissiers...</div>
+          <div style={styles.loading}>Chargement des comptes...</div>
         ) : isError ? (
           <div style={styles.error}>Erreur lors du chargement des données.</div>
         ) : filteredCashiers.length === 0 ? (
           <div style={styles.emptyState}>
             <Users size={40} color="#9ca3af" style={{ marginBottom: '10px' }} />
             <p style={{ margin: 0, fontWeight: '600', color: '#374151' }}>
-              {searchTerm ? 'Aucun caissier ne correspond à votre recherche.' : 'Aucun compte caissier configuré.'}
+              {searchTerm ? 'Aucun compte ne correspond à votre recherche.' : 'Aucun compte opérateur configuré.'}
             </p>
             <p style={{ margin: '4px 0 16px', fontSize: '13px', color: '#9ca3af' }}>
-              {searchTerm ? 'Essayez un autre mot-clé.' : 'Créez un premier caissier pour lui donner accès au module de caisse.'}
+              {searchTerm ? 'Essayez un autre mot-clé.' : 'Créez un compte pour donner accès au module de caisse ou à l\'atelier.'}
             </p>
             {!searchTerm && (
               <button onClick={handleOpenAddModal} style={styles.primaryBtn}>
                 <UserPlus size={16} style={{ marginRight: '6px' }} />
-                Nouveau Caissier
+                Nouveau Compte
               </button>
             )}
           </div>
@@ -189,7 +197,7 @@ export default function CashiersPage() {
             <table style={styles.table}>
               <thead>
                 <tr style={styles.theadRow}>
-                  <th style={styles.th}>Caissier</th>
+                  <th style={styles.th}>Opérateur</th>
                   <th style={styles.th}>Email de Connexion</th>
                   <th style={styles.th}>Rôle Système</th>
                   <th style={styles.th}>Créé le</th>
@@ -214,7 +222,33 @@ export default function CashiersPage() {
                       <span style={styles.emailBadge}>{c.email}</span>
                     </td>
                     <td style={styles.td}>
-                      <span style={styles.roleBadge}>Caissier</span>
+                      {c.role === 'reparateur' ? (
+                        <span style={{
+                          ...styles.roleBadge,
+                          backgroundColor: '#f0f9ff',
+                          color: '#0284c7',
+                          border: '1px solid #bae6fd',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px'
+                        }}>
+                          <Wrench size={12} />
+                          Réparateur
+                        </span>
+                      ) : (
+                        <span style={{
+                          ...styles.roleBadge,
+                          backgroundColor: '#eff6ff',
+                          color: '#2563eb',
+                          border: '1px solid #bfdbfe',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px'
+                        }}>
+                          <ShoppingCart size={12} />
+                          Caissier
+                        </span>
+                      )}
                     </td>
                     <td style={styles.td}>
                       <span style={{ fontSize: '13px', color: '#6b7280' }}>
@@ -265,12 +299,12 @@ export default function CashiersPage() {
                 </div>
                 <div>
                   <h4 style={styles.modalTitle}>
-                    {editingCashier ? `Modifier le caissier : ${editingCashier.name}` : 'Ajouter un Nouveau Caissier'}
+                    {editingCashier ? `Modifier le compte : ${editingCashier.name}` : 'Ajouter un Nouveau Compte'}
                   </h4>
                   <p style={styles.modalSubtitle}>
                     {editingCashier 
                       ? 'Modifiez les informations d\'accès sans code OTP' 
-                      : 'Définissez les identifiants de connexion de l\'opérateur'}
+                      : 'Définissez les identifiants et le rôle de l\'opérateur'}
                   </p>
                 </div>
               </div>
@@ -303,7 +337,7 @@ export default function CashiersPage() {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="ex: Caissier 1"
+                    placeholder="ex: Yassine ou Atelier 1"
                     required
                     style={styles.inputWithIcon}
                   />
@@ -311,17 +345,32 @@ export default function CashiersPage() {
               </div>
 
               <div style={styles.inputGroup}>
-                <label style={styles.label}>Adresse Email (pour se connecter)</label>
+                <label style={styles.label}>Adresse Email (identifiant de connexion)</label>
                 <div style={styles.inputWrapper}>
                   <Mail size={16} style={styles.inputIcon} />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="ex: caissier@email.com"
+                    placeholder="ex: reparateur@confika.com"
                     required
                     style={styles.inputWithIcon}
                   />
+                </div>
+              </div>
+
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Rôle et Permissions</label>
+                <div style={styles.inputWrapper}>
+                  <Shield size={16} style={styles.inputIcon} />
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    style={styles.selectWithIcon}
+                  >
+                    <option value="caissier">Caissier — Accès Poste Caisse / POS</option>
+                    <option value="reparateur">Réparateur — Accès Atelier Réparations uniquement</option>
+                  </select>
                 </div>
               </div>
 
@@ -363,7 +412,7 @@ export default function CashiersPage() {
                     ? 'Enregistrement...' 
                     : editingCashier 
                       ? 'Enregistrer les modifications' 
-                      : 'Créer le compte caissier'}
+                      : 'Créer le compte'}
                 </button>
               </div>
             </form>
@@ -724,6 +773,18 @@ const styles = {
     borderRadius: '6px',
     border: '1px solid #d1d5db',
     outline: 'none',
+    boxSizing: 'border-box',
+  },
+  selectWithIcon: {
+    width: '100%',
+    padding: '10px 12px 10px 38px',
+    fontSize: '14px',
+    borderRadius: '6px',
+    border: '1px solid #d1d5db',
+    outline: 'none',
+    backgroundColor: '#ffffff',
+    color: '#111827',
+    cursor: 'pointer',
     boxSizing: 'border-box',
   },
   modalActions: {

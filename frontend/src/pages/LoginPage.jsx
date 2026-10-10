@@ -41,6 +41,8 @@ export default function LoginPage() {
       dispatch(setCredentials({ user: result.user, token: result.token }));
       if (result.user?.role === 'admin') {
         navigate('/');
+      } else if (result.user?.role === 'reparateur') {
+        navigate('/reparations');
       } else {
         navigate('/pos');
       }

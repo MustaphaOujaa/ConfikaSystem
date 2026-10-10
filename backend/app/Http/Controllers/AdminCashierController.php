@@ -19,7 +19,7 @@ class AdminCashierController extends Controller
             return response()->json(['message' => 'Action non autorisée.'], 403);
         }
 
-        $cashiers = User::where('role', 'caissier')
+        $cashiers = User::whereIn('role', ['caissier', 'reparateur'])
             ->orderBy('id', 'desc')
             ->get();
 
@@ -27,7 +27,7 @@ class AdminCashierController extends Controller
     }
 
     /**
-     * Create a new cashier account directly without OTP.
+     * Create a new cashier or repairer account directly without OTP.
      */
     public function store(Request $request): JsonResponse
     {
@@ -39,23 +39,26 @@ class AdminCashierController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:4'],
+            'role' => ['nullable', 'string', 'in:caissier,reparateur'],
         ]);
+
+        $role = $validated['role'] ?? 'caissier';
 
         $cashier = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
-            'role' => 'caissier',
+            'role' => $role,
         ]);
 
         return response()->json([
-            'message' => 'Compte caissier créé avec succès.',
+            'message' => 'Compte créé avec succès.',
             'cashier' => $cashier,
         ], 201);
     }
 
     /**
-     * Update cashier login info directly without OTP.
+     * Update cashier/repairer login info directly without OTP.
      */
     public function update(Request $request, User $cashier): JsonResponse
     {
@@ -63,14 +66,15 @@ class AdminCashierController extends Controller
             return response()->json(['message' => 'Action non autorisée.'], 403);
         }
 
-        if ($cashier->role !== 'caissier') {
-            return response()->json(['message' => 'Seuls les comptes caissiers peuvent être gérés ici.'], 422);
+        if ($cashier->role === 'admin') {
+            return response()->json(['message' => 'Le compte administrateur ne peut pas être modifié ici.'], 422);
         }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($cashier->id)],
             'password' => ['nullable', 'string', 'min:4'],
+            'role' => ['nullable', 'string', 'in:caissier,reparateur'],
         ]);
 
         $cashier->name = $validated['name'];
@@ -80,16 +84,20 @@ class AdminCashierController extends Controller
             $cashier->password = Hash::make($validated['password']);
         }
 
+        if (! empty($validated['role'])) {
+            $cashier->role = $validated['role'];
+        }
+
         $cashier->save();
 
         return response()->json([
-            'message' => 'Informations du caissier mises à jour avec succès.',
+            'message' => 'Informations du compte mises à jour avec succès.',
             'cashier' => $cashier,
         ]);
     }
 
     /**
-     * Delete a cashier account.
+     * Delete a cashier or repairer account.
      */
     public function destroy(Request $request, User $cashier): JsonResponse
     {
@@ -97,7 +105,7 @@ class AdminCashierController extends Controller
             return response()->json(['message' => 'Action non autorisée.'], 403);
         }
 
-        if ($cashier->role !== 'caissier') {
+        if ($cashier->role === 'admin') {
             return response()->json(['message' => 'Action non autorisée sur ce type de compte.'], 422);
         }
 
@@ -105,7 +113,7 @@ class AdminCashierController extends Controller
         $cashier->delete();
 
         return response()->json([
-            'message' => 'Compte caissier supprimé avec succès.',
+            'message' => 'Compte supprimé avec succès.',
         ]);
     }
 }

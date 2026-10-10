@@ -36,18 +36,23 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
   };
 
   const isAdmin = user?.role === 'admin';
+  const isReparateur = user?.role === 'reparateur';
 
-  const navItems = [
-    ...(isAdmin ? [{ label: 'Tableau de bord', path: '/', icon: LayoutDashboard }] : []),
-    ...(isAdmin ? [{ label: 'Gestion des Caissiers', path: '/cashiers', icon: Users }] : []),
-    { label: 'Caisse / Vente (POS)', path: '/pos', icon: ShoppingCart },
-    { label: 'Atelier Réparations', path: '/reparations', icon: Wrench },
-    { label: 'Gestion des Produits', path: '/products', icon: Package },
-    { label: 'Catégories & Marques', path: '/categories', icon: Tags },
-    { label: 'Historique des Ventes', path: '/transactions', icon: Receipt },
-    { label: 'Gestion des Retours', path: '/returns', icon: RotateCcw },
-    ...(isAdmin ? [{ label: 'Sécurité & Accès', path: '/security', icon: ShieldCheck }] : []),
-  ];
+  const navItems = isReparateur 
+    ? [
+        { label: 'Atelier Réparations', path: '/reparations', icon: Wrench },
+      ]
+    : [
+        ...(isAdmin ? [{ label: 'Tableau de bord', path: '/', icon: LayoutDashboard }] : []),
+        ...(isAdmin ? [{ label: 'Gestion des Comptes', path: '/cashiers', icon: Users }] : []),
+        { label: 'Caisse / Vente (POS)', path: '/pos', icon: ShoppingCart },
+        { label: 'Atelier Réparations', path: '/reparations', icon: Wrench },
+        { label: 'Gestion des Produits', path: '/products', icon: Package },
+        { label: 'Catégories & Marques', path: '/categories', icon: Tags },
+        { label: 'Historique des Ventes', path: '/transactions', icon: Receipt },
+        { label: 'Gestion des Retours', path: '/returns', icon: RotateCcw },
+        ...(isAdmin ? [{ label: 'Sécurité & Accès', path: '/security', icon: ShieldCheck }] : []),
+      ];
 
   return (
     <>
@@ -118,10 +123,10 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
               <div style={styles.userName}>{user?.name || 'Utilisateur'}</div>
               <div style={{
                 ...styles.userRole,
-                color: user?.role === 'admin' ? '#dc2626' : '#2563eb',
+                color: user?.role === 'admin' ? '#dc2626' : user?.role === 'reparateur' ? '#0284c7' : '#2563eb',
                 fontWeight: '600'
               }}>
-                {user?.role === 'admin' ? 'Administrateur' : 'Caissier'}
+                {user?.role === 'admin' ? 'Administrateur' : user?.role === 'reparateur' ? 'Réparateur' : 'Caissier'}
               </div>
             </div>
           </div>
