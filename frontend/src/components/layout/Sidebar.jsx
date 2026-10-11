@@ -13,7 +13,8 @@ import {
   ShieldCheck,
   Users,
   RotateCcw,
-  Wrench
+  Wrench,
+  WalletCards
 } from 'lucide-react';
 import { logout, selectCurrentUser } from '../../store/authSlice';
 import { useGetLowStockAlertsQuery } from '../../api/apiSlice';
@@ -41,11 +42,13 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
   const navItems = isReparateur 
     ? [
         { label: 'Atelier Réparations', path: '/reparations', icon: Wrench },
+        { label: 'Sorties de Caisse (Dépenses)', path: '/expenses', icon: WalletCards },
       ]
     : [
         ...(isAdmin ? [{ label: 'Tableau de bord', path: '/', icon: LayoutDashboard }] : []),
         ...(isAdmin ? [{ label: 'Gestion des Comptes', path: '/cashiers', icon: Users }] : []),
         { label: 'Caisse / Vente (POS)', path: '/pos', icon: ShoppingCart },
+        { label: 'Sorties de Caisse (Dépenses)', path: '/expenses', icon: WalletCards },
         { label: 'Atelier Réparations', path: '/reparations', icon: Wrench },
         { label: 'Gestion des Produits', path: '/products', icon: Package },
         { label: 'Catégories & Marques', path: '/categories', icon: Tags },

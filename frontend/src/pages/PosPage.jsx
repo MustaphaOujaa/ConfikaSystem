@@ -12,8 +12,10 @@ import {
   X,
   Edit3,
   AlertTriangle,
-  ArrowRight
+  ArrowRight,
+  WalletCards
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { 
   useGetProductsQuery, 
@@ -465,11 +467,32 @@ export default function PosPage() {
       <div className="pos-left-col" style={styles.leftCol}>
         <div style={{ ...styles.card, flexGrow: 1 }}>
           {/* Card Header */}
-          <div style={styles.cardHeader}>
-            <Package size={18} style={{ color: '#2563eb', marginRight: '8px' }} />
-            <span style={styles.cardTitle}>
-              Catalogue des Produits ({totalCatalogCount} Articles)
-            </span>
+          <div style={{ ...styles.cardHeader, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <Package size={18} style={{ color: '#2563eb', marginRight: '8px' }} />
+              <span style={styles.cardTitle}>
+                Catalogue des Produits ({totalCatalogCount} Articles)
+              </span>
+            </div>
+            <Link
+              to="/expenses"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '5px 12px',
+                backgroundColor: '#fef2f2',
+                color: '#dc2626',
+                border: '1px solid #fecaca',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '700',
+                textDecoration: 'none',
+              }}
+              title="Déclarer une sortie de caisse ou voir l'historique des retraits"
+            >
+              <WalletCards size={14} style={{ marginRight: '6px' }} />
+              <span>Sorties de Caisse</span>
+            </Link>
           </div>
 
           <div style={styles.cardBody}>

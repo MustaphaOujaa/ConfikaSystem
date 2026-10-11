@@ -13,7 +13,7 @@ export const apiSlice = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Product', 'Category', 'Brand', 'Transaction', 'Return', 'LowStock', 'DailyReport', 'Cashier', 'Reparation', 'ReparationInventoryPart'],
+  tagTypes: ['Product', 'Category', 'Brand', 'Transaction', 'Return', 'LowStock', 'DailyReport', 'Cashier', 'Reparation', 'ReparationInventoryPart', 'Expense', 'MonthlyDetail'],
   endpoints: (builder) => ({
     // Auth
     login: builder.mutation({
@@ -106,11 +106,53 @@ export const apiSlice = createApi({
     // Daily & Monthly Reports
     getDailyReport: builder.query({
       query: (date) => `/reports/daily${date ? `?date=${date}` : ''}`,
-      providesTags: ['DailyReport'],
+      providesTags: ['DailyReport', 'Expense'],
     }),
     getMonthlyReport: builder.query({
       query: (year) => `/reports/monthly${year ? `?year=${year}` : ''}`,
-      providesTags: ['DailyReport', 'Transaction'],
+      providesTags: ['DailyReport', 'Transaction', 'Expense'],
+    }),
+    getMonthlyDetailReport: builder.query({
+      query: (month) => `/reports/monthly/detail${month ? `?month=${month}` : ''}`,
+      providesTags: ['DailyReport', 'MonthlyDetail', 'Expense', 'Transaction', 'Reparation'],
+    }),
+
+    // Expenses / Sorties de caisse (charges)
+    getExpenses: builder.query({
+      query: (params = {}) => {
+        const cleanParams = Object.entries(params).reduce((acc, [key, val]) => {
+          if (val !== undefined && val !== null && val !== '') {
+            acc[key] = val;
+          }
+          return acc;
+        }, {});
+        const queryParams = new URLSearchParams(cleanParams).toString();
+        return `/expenses${queryParams ? `?${queryParams}` : ''}`;
+      },
+      providesTags: ['Expense'],
+    }),
+    createExpense: builder.mutation({
+      query: (data) => ({
+        url: '/expenses',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Expense', 'DailyReport', 'MonthlyDetail'],
+    }),
+    updateExpense: builder.mutation({
+      query: ({ id, ...data }) => ({
+        url: `/expenses/${id}`,
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['Expense', 'DailyReport', 'MonthlyDetail'],
+    }),
+    deleteExpense: builder.mutation({
+      query: (id) => ({
+        url: `/expenses/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Expense', 'DailyReport', 'MonthlyDetail'],
     }),
 
     // Products
@@ -447,6 +489,12 @@ export const {
   useUpdateAdminPasswordMutation,
   useGetDailyReportQuery,
   useGetMonthlyReportQuery,
+  useGetMonthlyDetailReportQuery,
+  // Expenses hooks
+  useGetExpensesQuery,
+  useCreateExpenseMutation,
+  useUpdateExpenseMutation,
+  useDeleteExpenseMutation,
   useGetProductsQuery,
   useLazyGetProductsQuery,
   useGetProductByIdQuery,

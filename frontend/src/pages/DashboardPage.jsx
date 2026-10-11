@@ -14,7 +14,9 @@ import {
   ShoppingBag,
   ChevronDown,
   ChevronUp,
-  Wrench
+  Wrench,
+  WalletCards,
+  BarChart2
 } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { 
@@ -22,7 +24,8 @@ import {
   useGetLowStockAlertsQuery, 
   useGetCategoriesQuery, 
   useGetTransactionsQuery,
-  useGetDailyReportQuery
+  useGetDailyReportQuery,
+  useGetMonthlyDetailReportQuery
 } from '../api/apiSlice';
 import { selectCurrentUser } from '../store/authSlice';
 import MonthlyGainChart from '../components/MonthlyGainChart';
@@ -32,7 +35,10 @@ export default function DashboardPage() {
   const isAdmin = user?.role === 'admin';
 
   const todayStr = new Date().toISOString().split('T')[0];
+  const currentMonthStr = todayStr.slice(0, 7);
   const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
+  const [showMonthlyReport, setShowMonthlyReport] = useState(false);
   const [soldSearch, setSoldSearch] = useState('');
   const [showSoldTable, setShowSoldTable] = useState(true);
   const [showReparationsTable, setShowReparationsTable] = useState(true);
@@ -44,6 +50,9 @@ export default function DashboardPage() {
   const { data: dailyReport, isLoading: loadingDaily } = useGetDailyReportQuery(selectedDate, {
     skip: !isAdmin,
     pollingInterval: selectedDate === todayStr && isAdmin ? 15000 : undefined,
+  });
+  const { data: monthlyDetail, isLoading: loadingMonthly } = useGetMonthlyDetailReportQuery(selectedMonth, {
+    skip: !isAdmin || !showMonthlyReport,
   });
 
   const productsSoldList = dailyReport?.products_sold || [];
@@ -171,22 +180,36 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 3. Consolidé: CA Total */}
+            {/* 3. Sorties de Caisse (Expenses) — RED */}
+            <div style={{ ...styles.dailyItem, backgroundColor: '#fff1f2', borderColor: '#fecdd3' }}>
+              <div style={{ ...styles.dailyLabel, color: '#be123c' }}>
+                <WalletCards size={13} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                Sorties de Caisse
+              </div>
+              <div style={styles.dailyVal('#be123c')}>
+                {loadingDaily ? '...' : `- ${Number(dailyReport?.how_much_spent || dailyReport?.total_expenses_today || 0).toFixed(2)} MAD`}
+              </div>
+              <div style={styles.dailySub}>
+                {dailyReport?.expenses_count || 0} sortie{(dailyReport?.expenses_count || 0) > 1 ? 's' : ''} déclarée{(dailyReport?.expenses_count || 0) > 1 ? 's' : ''}
+              </div>
+            </div>
+
+            {/* 4. Consolidé: CA Total */}
             <div style={{ ...styles.dailyItem, backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }}>
               <div style={{ ...styles.dailyLabel, color: '#0369a1' }}>CA Total Global (Journée)</div>
               <div style={styles.dailyVal('#0369a1')}>
-                {loadingDaily ? '...' : `${Number(dailyReport?.grand_total_revenue || 0).toFixed(2)} MAD`}
+                {loadingDaily ? '...' : `${Number(dailyReport?.how_much_sold || dailyReport?.grand_total_revenue || 0).toFixed(2)} MAD`}
               </div>
               <div style={styles.dailySub}>Ventes magasin + Atelier réparations</div>
             </div>
 
-            {/* 3. Consolidé: Bénéfice Net Total */}
+            {/* 5. Consolidé: Gain Net Réel */}
             <div style={{ ...styles.dailyItem, backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}>
-              <div style={{ ...styles.dailyLabel, color: '#15803d' }}>Bénéfice Net Total Combiné</div>
+              <div style={{ ...styles.dailyLabel, color: '#15803d' }}>Gain Net Réel (après dépenses)</div>
               <div style={styles.dailyVal('#15803d')}>
-                {loadingDaily ? '...' : `+ ${Number(dailyReport?.grand_total_profit || 0).toFixed(2)} MAD`}
+                {loadingDaily ? '...' : `+ ${Number(dailyReport?.how_much_gained ?? dailyReport?.grand_total_profit ?? 0).toFixed(2)} MAD`}
               </div>
-              <div style={styles.dailySub}>Gain total réalisé par le commerce</div>
+              <div style={styles.dailySub}>Gain brut − Sorties de caisse</div>
             </div>
           </div>
 
@@ -391,25 +414,206 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Consolidated Daily Total Summary Bar */}
-          <div style={{ marginTop: '20px', padding: '16px 20px', backgroundColor: '#1e293b', borderRadius: '8px', color: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
-            <div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '700' }}>
-                Bilan Consolidé de la Journée ({selectedDate})
-              </div>
-              <div style={{ fontSize: '13px', color: '#cbd5e1', marginTop: '4px' }}>
-                Ventes Magasin : <strong style={{ color: '#ffffff' }}>+{Number(dailyReport?.sales_profit_today ?? dailyReport?.net_profit_today ?? 0).toFixed(2)} MAD</strong>
-                {'  '}•{'  '}
-                Atelier Réparations : <strong style={{ color: '#38bdf8' }}>+{Number(dailyReport?.reparations?.profit || 0).toFixed(2)} MAD</strong>
-              </div>
+          {/* Consolidated Daily Total Summary Bar — 4 Metrics */}
+          <div style={{ marginTop: '20px', padding: '18px 22px', backgroundColor: '#0f172a', borderRadius: '10px', color: '#ffffff' }}>
+            <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700', marginBottom: '14px' }}>
+              📊 Bilan Financier de la Journée — {selectedDate}
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>Bénéfice Net Total (Ventes + Réparations)</div>
-              <div style={{ fontSize: '22px', fontWeight: '900', color: '#4ade80' }}>
-                + {Number(dailyReport?.combined_summary?.grand_total_profit ?? dailyReport?.net_profit_today ?? 0).toFixed(2)} MAD
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+              {/* How much sold */}
+              <div style={{ background: 'rgba(37,99,235,0.15)', borderRadius: '8px', padding: '12px 14px', borderLeft: '3px solid #3b82f6' }}>
+                <div style={{ fontSize: '11px', color: '#93c5fd', fontWeight: '600', marginBottom: '4px' }}>💰 CE QU'ON A VENDU</div>
+                <div style={{ fontSize: '20px', fontWeight: '900', color: '#dbeafe' }}>
+                  {Number(dailyReport?.how_much_sold || dailyReport?.grand_total_revenue || 0).toFixed(2)}
+                  <span style={{ fontSize: '12px', marginLeft: '4px', color: '#93c5fd' }}>MAD</span>
+                </div>
+                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>CA total (magasin + atelier)</div>
+              </div>
+              {/* How much earned */}
+              <div style={{ background: 'rgba(22,163,74,0.15)', borderRadius: '8px', padding: '12px 14px', borderLeft: '3px solid #22c55e' }}>
+                <div style={{ fontSize: '11px', color: '#86efac', fontWeight: '600', marginBottom: '4px' }}>📈 CE QU'ON A GAGNÉ (BRUT)</div>
+                <div style={{ fontSize: '20px', fontWeight: '900', color: '#dcfce7' }}>
+                  +{Number(dailyReport?.how_much_earned || 0).toFixed(2)}
+                  <span style={{ fontSize: '12px', marginLeft: '4px', color: '#86efac' }}>MAD</span>
+                </div>
+                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Marge brute (avant dépenses)</div>
+              </div>
+              {/* How much spent */}
+              <div style={{ background: 'rgba(190,18,60,0.15)', borderRadius: '8px', padding: '12px 14px', borderLeft: '3px solid #ef4444' }}>
+                <div style={{ fontSize: '11px', color: '#fca5a5', fontWeight: '600', marginBottom: '4px' }}>🧾 CE QU'ON A DÉPENSÉ</div>
+                <div style={{ fontSize: '20px', fontWeight: '900', color: '#fee2e2' }}>
+                  -{Number(dailyReport?.how_much_spent || dailyReport?.total_expenses_today || 0).toFixed(2)}
+                  <span style={{ fontSize: '12px', marginLeft: '4px', color: '#fca5a5' }}>MAD</span>
+                </div>
+                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Sorties de caisse déclarées</div>
+              </div>
+              {/* How much gained net */}
+              <div style={{ background: 'rgba(16,185,129,0.2)', borderRadius: '8px', padding: '12px 14px', borderLeft: '4px solid #10b981', boxShadow: '0 0 12px rgba(16,185,129,0.2)' }}>
+                <div style={{ fontSize: '11px', color: '#6ee7b7', fontWeight: '700', marginBottom: '4px' }}>✅ GAIN NET RÉEL (FIN DE JOURNÉE)</div>
+                <div style={{ fontSize: '24px', fontWeight: '900', color: '#d1fae5' }}>
+                  +{Number(dailyReport?.how_much_gained ?? dailyReport?.grand_total_profit ?? 0).toFixed(2)}
+                  <span style={{ fontSize: '13px', marginLeft: '4px', color: '#6ee7b7' }}>MAD</span>
+                </div>
+                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Gagné brut − Sorties de caisse</div>
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Monthly Report Section (Admin Only) */}
+      {isAdmin && (
+        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          {/* Header / Toggle */}
+          <div
+            onClick={() => setShowMonthlyReport(!showMonthlyReport)}
+            style={{ padding: '16px 20px', backgroundColor: '#f8fafc', borderBottom: showMonthlyReport ? '1px solid #e5e7eb' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <BarChart2 size={20} style={{ color: '#7c3aed' }} />
+              <span style={{ fontWeight: '700', fontSize: '15px', color: '#1e293b' }}>Rapport Mensuel Détaillé</span>
+              {showMonthlyReport && selectedMonth && (
+                <span style={{ fontSize: '12px', color: '#7c3aed', backgroundColor: '#ede9fe', padding: '2px 8px', borderRadius: '12px', fontWeight: '600' }}>
+                  {selectedMonth}
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {showMonthlyReport && (
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  max={currentMonthStr}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => { if (e.target.value <= currentMonthStr) setSelectedMonth(e.target.value); }}
+                  style={{ border: '1px solid #d1d5db', borderRadius: '6px', padding: '4px 8px', fontSize: '13px', color: '#374151', outline: 'none' }}
+                />
+              )}
+              {showMonthlyReport && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); window.open(`/reports/monthly/print?month=${selectedMonth}`, '_blank', 'width=800,height=900'); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', backgroundColor: '#7c3aed', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+                >
+                  <Printer size={13} /> Imprimer
+                </button>
+              )}
+              {showMonthlyReport ? <ChevronUp size={18} style={{ color: '#64748b' }} /> : <ChevronDown size={18} style={{ color: '#64748b' }} />}
+            </div>
+          </div>
+
+          {/* Monthly Report Content */}
+          {showMonthlyReport && (
+            <div style={{ padding: '20px' }}>
+              {loadingMonthly ? (
+                <div style={{ textAlign: 'center', color: '#6b7280', padding: '40px' }}>Chargement du rapport mensuel...</div>
+              ) : !monthlyDetail ? (
+                <div style={{ textAlign: 'center', color: '#6b7280', padding: '40px' }}>Aucune donnée pour ce mois.</div>
+              ) : (
+                <>
+                  {/* 4-Metric KPI Bar */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '22px' }}>
+                    <div style={{ backgroundColor: '#eff6ff', borderRadius: '8px', padding: '14px 16px', borderLeft: '4px solid #2563eb' }}>
+                      <div style={{ fontSize: '11px', color: '#2563eb', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px' }}>💰 Total Vendu</div>
+                      <div style={{ fontSize: '22px', fontWeight: '900', color: '#1d4ed8' }}>{Number(monthlyDetail?.how_much_sold || 0).toFixed(2)}</div>
+                      <div style={{ fontSize: '11px', color: '#6b7280' }}>MAD — CA total du mois</div>
+                    </div>
+                    <div style={{ backgroundColor: '#f0fdf4', borderRadius: '8px', padding: '14px 16px', borderLeft: '4px solid #16a34a' }}>
+                      <div style={{ fontSize: '11px', color: '#16a34a', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px' }}>📈 Gagné (Brut)</div>
+                      <div style={{ fontSize: '22px', fontWeight: '900', color: '#15803d' }}>+{Number(monthlyDetail?.how_much_earned || 0).toFixed(2)}</div>
+                      <div style={{ fontSize: '11px', color: '#6b7280' }}>MAD — Marge brute mensuelle</div>
+                    </div>
+                    <div style={{ backgroundColor: '#fff1f2', borderRadius: '8px', padding: '14px 16px', borderLeft: '4px solid #dc2626' }}>
+                      <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px' }}>🧾 Dépensé</div>
+                      <div style={{ fontSize: '22px', fontWeight: '900', color: '#be123c' }}>-{Number(monthlyDetail?.how_much_spent || 0).toFixed(2)}</div>
+                      <div style={{ fontSize: '11px', color: '#6b7280' }}>MAD — Sorties de caisse</div>
+                    </div>
+                    <div style={{ backgroundColor: '#ecfdf5', borderRadius: '8px', padding: '14px 16px', borderLeft: '4px solid #10b981', boxShadow: '0 0 10px rgba(16,185,129,0.12)' }}>
+                      <div style={{ fontSize: '11px', color: '#059669', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px' }}>✅ Gain Net Réel</div>
+                      <div style={{ fontSize: '26px', fontWeight: '900', color: '#065f46' }}>+{Number(monthlyDetail?.how_much_gained || 0).toFixed(2)}</div>
+                      <div style={{ fontSize: '11px', color: '#6b7280' }}>MAD — Bénéfice net du mois</div>
+                    </div>
+                  </div>
+
+                  {/* Day-by-Day Breakdown Table */}
+                  {monthlyDetail?.daily_breakdown?.length > 0 && (
+                    <div style={{ marginBottom: '20px' }}>
+                      <div style={{ fontWeight: '700', fontSize: '14px', color: '#1e293b', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Calendar size={15} style={{ color: '#7c3aed' }} /> Détail Jour par Jour
+                      </div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f3f4f6' }}>
+                              <th style={{ ...styles.th, textAlign: 'left' }}>Date</th>
+                              <th style={{ ...styles.th, textAlign: 'right' }}>CA Vendu</th>
+                              <th style={{ ...styles.th, textAlign: 'right', color: '#16a34a' }}>Gagné Brut</th>
+                              <th style={{ ...styles.th, textAlign: 'right', color: '#dc2626' }}>Dépenses</th>
+                              <th style={{ ...styles.th, textAlign: 'right', color: '#065f46' }}>Gain Net</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {monthlyDetail.daily_breakdown.map((day, idx) => (
+                              <tr key={day.date} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f9fafb', borderBottom: '1px solid #f3f4f6' }}>
+                                <td style={{ ...styles.td, fontWeight: '600' }}>
+                                  {new Date(day.date).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+                                </td>
+                                <td style={{ ...styles.td, textAlign: 'right', color: '#1d4ed8' }}>{Number(day.combined_revenue || 0).toFixed(2)}</td>
+                                <td style={{ ...styles.td, textAlign: 'right', color: '#16a34a', fontWeight: '600' }}>+{Number(day.gross_profit || 0).toFixed(2)}</td>
+                                <td style={{ ...styles.td, textAlign: 'right', color: '#dc2626' }}>
+                                  {Number(day.expenses || 0) > 0 ? `-${Number(day.expenses).toFixed(2)}` : '—'}
+                                </td>
+                                <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700', color: Number(day.net_profit || 0) >= 0 ? '#065f46' : '#dc2626' }}>
+                                  {Number(day.net_profit || 0) >= 0 ? '+' : ''}{Number(day.net_profit || 0).toFixed(2)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr style={{ backgroundColor: '#f0fdf4', fontWeight: '700', borderTop: '2px solid #bbf7d0' }}>
+                              <td style={{ ...styles.td }}>TOTAL MOIS</td>
+                              <td style={{ ...styles.td, textAlign: 'right', color: '#1d4ed8' }}>{Number(monthlyDetail?.how_much_sold || 0).toFixed(2)}</td>
+                              <td style={{ ...styles.td, textAlign: 'right', color: '#16a34a' }}>+{Number(monthlyDetail?.how_much_earned || 0).toFixed(2)}</td>
+                              <td style={{ ...styles.td, textAlign: 'right', color: '#dc2626' }}>-{Number(monthlyDetail?.how_much_spent || 0).toFixed(2)}</td>
+                              <td style={{ ...styles.td, textAlign: 'right', color: '#065f46', fontSize: '14px' }}>+{Number(monthlyDetail?.how_much_gained || 0).toFixed(2)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Expenses of the month */}
+                  {monthlyDetail?.expenses?.items?.length > 0 && (
+                    <div>
+                      <div style={{ fontWeight: '700', fontSize: '14px', color: '#be123c', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <WalletCards size={15} /> Sorties de Caisse du Mois ({monthlyDetail.expenses.items.length})
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#fff1f2' }}>
+                            <th style={{ ...styles.th, textAlign: 'left' }}>Date</th>
+                            <th style={{ ...styles.th, textAlign: 'left' }}>Déclaré par</th>
+                            <th style={{ ...styles.th, textAlign: 'left' }}>Motif</th>
+                            <th style={{ ...styles.th, textAlign: 'right', color: '#dc2626' }}>Montant</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {monthlyDetail.expenses.items.map((exp, idx) => (
+                            <tr key={exp.id} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#fff7f7', borderBottom: '1px solid #fecdd3' }}>
+                              <td style={styles.td}>{new Date(exp.expense_date || exp.created_at).toLocaleDateString('fr-FR')}</td>
+                              <td style={{ ...styles.td, fontWeight: '600' }}>{exp.worker_name}</td>
+                              <td style={styles.td}>{exp.reason}</td>
+                              <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700', color: '#be123c' }}>-{Number(exp.amount).toFixed(2)} MAD</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
