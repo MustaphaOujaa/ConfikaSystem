@@ -14,6 +14,7 @@ Route::get('/returns/{productReturn}/receipt', function (ProductReturn $productR
 })->name('return.receipt.show');
 
 Route::get('/reports/daily/print', [ReportController::class, 'dailyBlade'])->name('reports.daily.blade');
+Route::get('/reports/monthly/print', [ReportController::class, 'monthlyBlade'])->name('reports.monthly.blade');
 
 Route::fallback(function () {
     return response()->file(public_path('index.html'));

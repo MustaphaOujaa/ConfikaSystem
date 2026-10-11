@@ -14,8 +14,10 @@ import {
   Package,
   Check,
   Calendar,
-  X
+  X,
+  WalletCards
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/authSlice';
 import {
@@ -142,10 +144,31 @@ export default function ReparationsPage() {
           <h1 style={styles.pageTitle}>Atelier de Réparation</h1>
           <p style={styles.pageSubtitle}>Gestion des bons de réparation, diagnostic, pièces et suivi financier</p>
         </div>
-        <button onClick={handleOpenCreate} style={styles.primaryBtn} type="button">
-          <Plus size={18} style={{ marginRight: '6px' }} />
-          Nouveau Bon de Réparation
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <Link
+            to="/expenses"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '9px 15px',
+              backgroundColor: '#fef2f2',
+              color: '#dc2626',
+              border: '1px solid #fecaca',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              textDecoration: 'none',
+            }}
+            title="Déclarer une sortie de caisse ou voir l'historique des retraits"
+          >
+            <WalletCards size={16} style={{ marginRight: '6px' }} />
+            <span>Sorties de Caisse</span>
+          </Link>
+          <button onClick={handleOpenCreate} style={styles.primaryBtn} type="button">
+            <Plus size={18} style={{ marginRight: '6px' }} />
+            Nouveau Bon de Réparation
+          </button>
+        </div>
       </div>
 
       {/* Tab Switcher */}

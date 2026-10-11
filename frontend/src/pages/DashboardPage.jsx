@@ -14,7 +14,11 @@ import {
   ShoppingBag,
   ChevronDown,
   ChevronUp,
-  Wrench
+  Wrench,
+  WalletCards,
+  BarChart2,
+  CheckCircle2,
+  Coins
 } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { 
@@ -22,7 +26,8 @@ import {
   useGetLowStockAlertsQuery, 
   useGetCategoriesQuery, 
   useGetTransactionsQuery,
-  useGetDailyReportQuery
+  useGetDailyReportQuery,
+  useGetMonthlyDetailReportQuery
 } from '../api/apiSlice';
 import { selectCurrentUser } from '../store/authSlice';
 import MonthlyGainChart from '../components/MonthlyGainChart';
@@ -32,7 +37,12 @@ export default function DashboardPage() {
   const isAdmin = user?.role === 'admin';
 
   const todayStr = new Date().toISOString().split('T')[0];
+  const currentMonthStr = todayStr.slice(0, 7);
   const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
+  const [showMonthlyReport, setShowMonthlyReport] = useState(false);
+  const [showMonthlyReparations, setShowMonthlyReparations] = useState(true);
+  const [showMonthlyProducts, setShowMonthlyProducts] = useState(false);
   const [soldSearch, setSoldSearch] = useState('');
   const [showSoldTable, setShowSoldTable] = useState(true);
   const [showReparationsTable, setShowReparationsTable] = useState(true);
@@ -44,6 +54,9 @@ export default function DashboardPage() {
   const { data: dailyReport, isLoading: loadingDaily } = useGetDailyReportQuery(selectedDate, {
     skip: !isAdmin,
     pollingInterval: selectedDate === todayStr && isAdmin ? 15000 : undefined,
+  });
+  const { data: monthlyDetail, isLoading: loadingMonthly } = useGetMonthlyDetailReportQuery(selectedMonth, {
+    skip: !isAdmin || !showMonthlyReport,
   });
 
   const productsSoldList = dailyReport?.products_sold || [];
@@ -171,22 +184,36 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 3. Consolidé: CA Total */}
+            {/* 3. Sorties de Caisse (Expenses) — RED */}
+            <div style={{ ...styles.dailyItem, backgroundColor: '#fff1f2', borderColor: '#fecdd3' }}>
+              <div style={{ ...styles.dailyLabel, color: '#be123c' }}>
+                <WalletCards size={13} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                Sorties de Caisse
+              </div>
+              <div style={styles.dailyVal('#be123c')}>
+                {loadingDaily ? '...' : `- ${Number(dailyReport?.how_much_spent || dailyReport?.total_expenses_today || 0).toFixed(2)} MAD`}
+              </div>
+              <div style={styles.dailySub}>
+                {dailyReport?.expenses_count || 0} sortie{(dailyReport?.expenses_count || 0) > 1 ? 's' : ''} déclarée{(dailyReport?.expenses_count || 0) > 1 ? 's' : ''}
+              </div>
+            </div>
+
+            {/* 4. Consolidé: CA Total */}
             <div style={{ ...styles.dailyItem, backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }}>
               <div style={{ ...styles.dailyLabel, color: '#0369a1' }}>CA Total Global (Journée)</div>
               <div style={styles.dailyVal('#0369a1')}>
-                {loadingDaily ? '...' : `${Number(dailyReport?.grand_total_revenue || 0).toFixed(2)} MAD`}
+                {loadingDaily ? '...' : `${Number(dailyReport?.how_much_sold || dailyReport?.grand_total_revenue || 0).toFixed(2)} MAD`}
               </div>
               <div style={styles.dailySub}>Ventes magasin + Atelier réparations</div>
             </div>
 
-            {/* 3. Consolidé: Bénéfice Net Total */}
+            {/* 5. Consolidé: Gain Net Réel */}
             <div style={{ ...styles.dailyItem, backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}>
-              <div style={{ ...styles.dailyLabel, color: '#15803d' }}>Bénéfice Net Total Combiné</div>
+              <div style={{ ...styles.dailyLabel, color: '#15803d' }}>Gain Net Réel (après dépenses)</div>
               <div style={styles.dailyVal('#15803d')}>
-                {loadingDaily ? '...' : `+ ${Number(dailyReport?.grand_total_profit || 0).toFixed(2)} MAD`}
+                {loadingDaily ? '...' : `+ ${Number(dailyReport?.how_much_gained ?? dailyReport?.grand_total_profit ?? 0).toFixed(2)} MAD`}
               </div>
-              <div style={styles.dailySub}>Gain total réalisé par le commerce</div>
+              <div style={styles.dailySub}>Gain brut − Sorties de caisse</div>
             </div>
           </div>
 
@@ -390,26 +417,374 @@ export default function DashboardPage() {
               )
             )}
           </div>
+        </div>
+      )}
 
-          {/* Consolidated Daily Total Summary Bar */}
-          <div style={{ marginTop: '20px', padding: '16px 20px', backgroundColor: '#1e293b', borderRadius: '8px', color: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
-            <div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '700' }}>
-                Bilan Consolidé de la Journée ({selectedDate})
-              </div>
-              <div style={{ fontSize: '13px', color: '#cbd5e1', marginTop: '4px' }}>
-                Ventes Magasin : <strong style={{ color: '#ffffff' }}>+{Number(dailyReport?.sales_profit_today ?? dailyReport?.net_profit_today ?? 0).toFixed(2)} MAD</strong>
-                {'  '}•{'  '}
-                Atelier Réparations : <strong style={{ color: '#38bdf8' }}>+{Number(dailyReport?.reparations?.profit || 0).toFixed(2)} MAD</strong>
-              </div>
+      {/* Monthly Report Section (Admin Only) */}
+      {isAdmin && (
+        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          {/* Header / Toggle */}
+          <div
+            onClick={() => setShowMonthlyReport(!showMonthlyReport)}
+            style={{ padding: '16px 20px', backgroundColor: '#f8fafc', borderBottom: showMonthlyReport ? '1px solid #e5e7eb' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <BarChart2 size={20} style={{ color: '#7c3aed' }} />
+              <span style={{ fontWeight: '700', fontSize: '15px', color: '#1e293b' }}>Rapport Mensuel Détaillé</span>
+              {showMonthlyReport && selectedMonth && (
+                <span style={{ fontSize: '12px', color: '#7c3aed', backgroundColor: '#ede9fe', padding: '2px 8px', borderRadius: '12px', fontWeight: '600' }}>
+                  {selectedMonth}
+                </span>
+              )}
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>Bénéfice Net Total (Ventes + Réparations)</div>
-              <div style={{ fontSize: '22px', fontWeight: '900', color: '#4ade80' }}>
-                + {Number(dailyReport?.combined_summary?.grand_total_profit ?? dailyReport?.net_profit_today ?? 0).toFixed(2)} MAD
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {showMonthlyReport && (
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  max={currentMonthStr}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => { if (e.target.value <= currentMonthStr) setSelectedMonth(e.target.value); }}
+                  style={{ border: '1px solid #d1d5db', borderRadius: '6px', padding: '4px 8px', fontSize: '13px', color: '#374151', outline: 'none' }}
+                />
+              )}
+              {showMonthlyReport && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); window.open(`/reports/monthly/print?month=${selectedMonth}`, '_blank', 'width=800,height=900'); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', backgroundColor: '#7c3aed', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+                >
+                  <Printer size={13} /> Imprimer
+                </button>
+              )}
+              {showMonthlyReport ? <ChevronUp size={18} style={{ color: '#64748b' }} /> : <ChevronDown size={18} style={{ color: '#64748b' }} />}
             </div>
           </div>
+
+          {/* Monthly Report Content */}
+          {showMonthlyReport && (
+            <div style={{ padding: '20px' }}>
+              {loadingMonthly ? (
+                <div style={{ textAlign: 'center', color: '#6b7280', padding: '40px' }}>Chargement du rapport mensuel...</div>
+              ) : !monthlyDetail ? (
+                <div style={{ textAlign: 'center', color: '#6b7280', padding: '40px' }}>Aucune donnée pour ce mois.</div>
+              ) : (
+                <>
+                  {/* Detailed Monthly KPI Cards Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '22px' }}>
+                    {/* 1. CA Ventes Magasin */}
+                    <div style={{ backgroundColor: '#eff6ff', borderRadius: '8px', padding: '14px 16px', borderLeft: '4px solid #2563eb' }}>
+                      <div style={{ fontSize: '11px', color: '#2563eb', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <ShoppingCart size={13} />
+                        <span>CA Ventes Magasin</span>
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: '900', color: '#1d4ed8' }}>
+                        {Number(monthlyDetail?.total_sales_revenue || monthlyDetail?.sales_revenue || 0).toFixed(2)}
+                        <span style={{ fontSize: '12px', marginLeft: '4px', color: '#6b7280' }}>MAD</span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                        Gain : +{Number(monthlyDetail?.sales_profit_month ?? monthlyDetail?.sales_profit ?? 0).toFixed(2)} MAD
+                      </div>
+                    </div>
+
+                    {/* 2. CA Réparations Atelier */}
+                    <div style={{ backgroundColor: '#f0f9ff', borderRadius: '8px', padding: '14px 16px', borderLeft: '4px solid #0284c7' }}>
+                      <div style={{ fontSize: '11px', color: '#0284c7', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Wrench size={13} />
+                        <span>CA Réparations Atelier</span>
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: '900', color: '#0369a1' }}>
+                        {Number(monthlyDetail?.reparations_revenue_month ?? monthlyDetail?.reparations?.revenue ?? 0).toFixed(2)}
+                        <span style={{ fontSize: '12px', marginLeft: '4px', color: '#6b7280' }}>MAD</span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                        {monthlyDetail?.reparations_count_month ?? monthlyDetail?.reparations?.count ?? 0} réparation(s) clôturée(s)
+                      </div>
+                    </div>
+
+                    {/* 3. Gain Réparations (Atelier) */}
+                    <div style={{ backgroundColor: '#f0fdf4', borderRadius: '8px', padding: '14px 16px', borderLeft: '4px solid #16a34a' }}>
+                      <div style={{ fontSize: '11px', color: '#16a34a', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <TrendingUp size={13} />
+                        <span>Bénéfice Réparations</span>
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: '900', color: '#15803d' }}>
+                        +{Number(monthlyDetail?.reparations_profit_month ?? monthlyDetail?.reparations?.profit ?? 0).toFixed(2)}
+                        <span style={{ fontSize: '12px', marginLeft: '4px', color: '#16a34a' }}>MAD</span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                        Pièces : {Number(monthlyDetail?.reparations_cost_month ?? monthlyDetail?.reparations?.cost ?? 0).toFixed(2)} MAD
+                      </div>
+                    </div>
+
+                    {/* 4. CA Total Global (Magasin + Réparation) */}
+                    <div style={{ backgroundColor: '#faf5ff', borderRadius: '8px', padding: '14px 16px', borderLeft: '4px solid #7c3aed' }}>
+                      <div style={{ fontSize: '11px', color: '#7c3aed', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Coins size={13} />
+                        <span>CA Total Global</span>
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: '900', color: '#6d28d9' }}>
+                        {Number(monthlyDetail?.how_much_sold || monthlyDetail?.grand_total_revenue || 0).toFixed(2)}
+                        <span style={{ fontSize: '12px', marginLeft: '4px', color: '#6b7280' }}>MAD</span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>Ventes + Réparations</div>
+                    </div>
+
+                    {/* 5. Gain Brut Total (Avant charges) */}
+                    <div style={{ backgroundColor: '#f0fdf4', borderRadius: '8px', padding: '14px 16px', borderLeft: '4px solid #22c55e' }}>
+                      <div style={{ fontSize: '11px', color: '#15803d', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <BarChart2 size={13} />
+                        <span>Gain Brut Total</span>
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: '900', color: '#166534' }}>
+                        +{Number(monthlyDetail?.how_much_earned || monthlyDetail?.grand_total_gross_profit || 0).toFixed(2)}
+                        <span style={{ fontSize: '12px', marginLeft: '4px', color: '#15803d' }}>MAD</span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>Avant déduction charges</div>
+                    </div>
+
+                    {/* 6. Sorties de Caisse & Charges */}
+                    <div style={{ backgroundColor: '#fff1f2', borderRadius: '8px', padding: '14px 16px', borderLeft: '4px solid #dc2626' }}>
+                      <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <WalletCards size={13} />
+                        <span>Sorties / Charges</span>
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: '900', color: '#be123c' }}>
+                        -{Number(monthlyDetail?.how_much_spent || monthlyDetail?.total_expenses_month || 0).toFixed(2)}
+                        <span style={{ fontSize: '12px', marginLeft: '4px', color: '#be123c' }}>MAD</span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                        {monthlyDetail?.expenses_count_month ?? monthlyDetail?.expenses?.count ?? 0} dépense(s)
+                      </div>
+                    </div>
+
+                    {/* 7. Gain Net Réel Final (Après charges) */}
+                    <div style={{ backgroundColor: '#ecfdf5', borderRadius: '8px', padding: '14px 16px', borderLeft: '4px solid #10b981', boxShadow: '0 0 10px rgba(16,185,129,0.15)' }}>
+                      <div style={{ fontSize: '11px', color: '#059669', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <CheckCircle2 size={13} />
+                        <span>Gain Net Réel Final</span>
+                      </div>
+                      <div style={{ fontSize: '24px', fontWeight: '900', color: '#065f46' }}>
+                        +{Number(monthlyDetail?.how_much_gained ?? monthlyDetail?.grand_total_profit ?? 0).toFixed(2)}
+                        <span style={{ fontSize: '13px', marginLeft: '4px', color: '#059669' }}>MAD</span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>Gain brut − Charges</div>
+                    </div>
+                  </div>
+
+                  {/* Day-by-Day Breakdown Table */}
+                  {monthlyDetail?.daily_breakdown?.length > 0 && (
+                    <div style={{ marginBottom: '22px' }}>
+                      <div style={{ fontWeight: '700', fontSize: '14px', color: '#1e293b', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Calendar size={15} style={{ color: '#7c3aed' }} /> Détail Jour par Jour (Mois {selectedMonth})
+                      </div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f3f4f6' }}>
+                              <th style={{ ...styles.th, textAlign: 'left' }}>Date</th>
+                              <th style={{ ...styles.th, textAlign: 'right' }}>CA Ventes</th>
+                              <th style={{ ...styles.th, textAlign: 'right', color: '#0284c7' }}>CA Rép.</th>
+                              <th style={{ ...styles.th, textAlign: 'right' }}>CA Total</th>
+                              <th style={{ ...styles.th, textAlign: 'right', color: '#16a34a' }}>Gain Brut</th>
+                              <th style={{ ...styles.th, textAlign: 'right', color: '#dc2626' }}>Charges</th>
+                              <th style={{ ...styles.th, textAlign: 'right', color: '#065f46' }}>Gain Net</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {monthlyDetail.daily_breakdown.map((day, idx) => (
+                              <tr key={day.date} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f9fafb', borderBottom: '1px solid #f3f4f6' }}>
+                                <td style={{ ...styles.td, fontWeight: '600' }}>
+                                  {new Date(day.date).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+                                </td>
+                                <td style={{ ...styles.td, textAlign: 'right', color: '#1d4ed8' }}>{Number(day.sales_revenue || 0).toFixed(2)}</td>
+                                <td style={{ ...styles.td, textAlign: 'right', color: '#0284c7' }}>{Number(day.reparations_revenue || 0).toFixed(2)}</td>
+                                <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700' }}>{Number(day.combined_revenue || 0).toFixed(2)}</td>
+                                <td style={{ ...styles.td, textAlign: 'right', color: '#16a34a', fontWeight: '600' }}>+{Number(day.gross_profit || 0).toFixed(2)}</td>
+                                <td style={{ ...styles.td, textAlign: 'right', color: '#dc2626' }}>
+                                  {Number(day.expenses || 0) > 0 ? `-${Number(day.expenses).toFixed(2)}` : '—'}
+                                </td>
+                                <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700', color: Number(day.net_profit || 0) >= 0 ? '#065f46' : '#dc2626' }}>
+                                  {Number(day.net_profit || 0) >= 0 ? '+' : ''}{Number(day.net_profit || 0).toFixed(2)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr style={{ backgroundColor: '#f0fdf4', fontWeight: '700', borderTop: '2px solid #bbf7d0' }}>
+                              <td style={{ ...styles.td }}>TOTAL MOIS</td>
+                              <td style={{ ...styles.td, textAlign: 'right', color: '#1d4ed8' }}>{Number(monthlyDetail?.total_sales_revenue || monthlyDetail?.sales_revenue || 0).toFixed(2)}</td>
+                              <td style={{ ...styles.td, textAlign: 'right', color: '#0284c7' }}>{Number(monthlyDetail?.reparations_revenue_month ?? monthlyDetail?.reparations?.revenue ?? 0).toFixed(2)}</td>
+                              <td style={{ ...styles.td, textAlign: 'right' }}>{Number(monthlyDetail?.how_much_sold || 0).toFixed(2)}</td>
+                              <td style={{ ...styles.td, textAlign: 'right', color: '#16a34a' }}>+{Number(monthlyDetail?.how_much_earned || 0).toFixed(2)}</td>
+                              <td style={{ ...styles.td, textAlign: 'right', color: '#dc2626' }}>-{Number(monthlyDetail?.how_much_spent || 0).toFixed(2)}</td>
+                              <td style={{ ...styles.td, textAlign: 'right', color: '#065f46', fontSize: '14px' }}>+{Number(monthlyDetail?.how_much_gained || 0).toFixed(2)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Monthly Reparations Atelier Detail Section */}
+                  {monthlyDetail?.reparations?.items?.length > 0 && (
+                    <div style={{ marginBottom: '22px', border: '1px solid #e0f2fe', borderRadius: '8px', overflow: 'hidden' }}>
+                      <div
+                        onClick={() => setShowMonthlyReparations(!showMonthlyReparations)}
+                        style={{ padding: '12px 16px', backgroundColor: '#f0f9ff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Wrench size={16} style={{ color: '#0284c7' }} />
+                          <span style={{ fontWeight: '700', fontSize: '14px', color: '#0369a1' }}>
+                            Détail des Réparations du Mois ({monthlyDetail.reparations.items.length})
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: '700', color: '#0369a1' }}>
+                            CA: {Number(monthlyDetail?.reparations_revenue_month ?? monthlyDetail?.reparations?.revenue ?? 0).toFixed(2)} MAD • Gain: +{Number(monthlyDetail?.reparations_profit_month ?? monthlyDetail?.reparations?.profit ?? 0).toFixed(2)} MAD
+                          </span>
+                          {showMonthlyReparations ? <ChevronUp size={16} color="#0369a1" /> : <ChevronDown size={16} color="#0369a1" />}
+                        </div>
+                      </div>
+
+                      {showMonthlyReparations && (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                            <thead>
+                              <tr style={{ backgroundColor: '#e0f2fe' }}>
+                                <th style={{ ...styles.th, textAlign: 'left' }}>N° Bon</th>
+                                <th style={{ ...styles.th, textAlign: 'left' }}>Date</th>
+                                <th style={{ ...styles.th, textAlign: 'left' }}>Client / Tél</th>
+                                <th style={{ ...styles.th, textAlign: 'left' }}>Appareil</th>
+                                <th style={{ ...styles.th, textAlign: 'right' }}>Tarif (CA)</th>
+                                <th style={{ ...styles.th, textAlign: 'right', color: '#dc2626' }}>Coût Pièces</th>
+                                <th style={{ ...styles.th, textAlign: 'right', color: '#16a34a' }}>Gain Net</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {monthlyDetail.reparations.items.map((r) => (
+                                <tr key={r.id} style={{ borderBottom: '1px solid #f0f9ff' }}>
+                                  <td style={{ ...styles.td, fontWeight: '700', color: '#0284c7' }}>{r.ticket_number || `REP-${r.id}`}</td>
+                                  <td style={styles.td}>{r.date || '—'}</td>
+                                  <td style={styles.td}>
+                                    <div style={{ fontWeight: '600' }}>{r.client_name}</div>
+                                    <div style={{ fontSize: '11px', color: '#6b7280' }}>{r.client_phone}</div>
+                                  </td>
+                                  <td style={styles.td}>{r.device || '—'}</td>
+                                  <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700' }}>{Number(r.total_price || 0).toFixed(2)} MAD</td>
+                                  <td style={{ ...styles.td, textAlign: 'right', color: '#dc2626' }}>{Number(r.cout_pieces || 0).toFixed(2)} MAD</td>
+                                  <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700', color: '#16a34a' }}>+{Number(r.gain || 0).toFixed(2)} MAD</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr style={{ backgroundColor: '#f0f9ff', fontWeight: '700', borderTop: '2px solid #bae6fd' }}>
+                                <td colSpan={4} style={{ ...styles.td, textAlign: 'right' }}>TOTAL RÉPARATIONS :</td>
+                                <td style={{ ...styles.td, textAlign: 'right', color: '#0284c7' }}>{Number(monthlyDetail?.reparations_revenue_month ?? monthlyDetail?.reparations?.revenue ?? 0).toFixed(2)} MAD</td>
+                                <td style={{ ...styles.td, textAlign: 'right', color: '#dc2626' }}>{Number(monthlyDetail?.reparations_cost_month ?? monthlyDetail?.reparations?.cost ?? 0).toFixed(2)} MAD</td>
+                                <td style={{ ...styles.td, textAlign: 'right', color: '#16a34a' }}>+{Number(monthlyDetail?.reparations_profit_month ?? monthlyDetail?.reparations?.profit ?? 0).toFixed(2)} MAD</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Monthly Expenses of the month */}
+                  {monthlyDetail?.expenses?.items?.length > 0 && (
+                    <div style={{ marginBottom: '22px' }}>
+                      <div style={{ fontWeight: '700', fontSize: '14px', color: '#be123c', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <WalletCards size={15} /> Sorties de Caisse / Charges du Mois ({monthlyDetail.expenses.items.length})
+                      </div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#fff1f2' }}>
+                              <th style={{ ...styles.th, textAlign: 'left' }}>Date</th>
+                              <th style={{ ...styles.th, textAlign: 'left' }}>Déclaré par</th>
+                              <th style={{ ...styles.th, textAlign: 'left' }}>Motif</th>
+                              <th style={{ ...styles.th, textAlign: 'right', color: '#dc2626' }}>Montant</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {monthlyDetail.expenses.items.map((exp, idx) => (
+                              <tr key={exp.id} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#fff7f7', borderBottom: '1px solid #fecdd3' }}>
+                                <td style={styles.td}>{exp.date || (new Date(exp.expense_date || exp.created_at).toLocaleDateString('fr-FR'))}</td>
+                                <td style={{ ...styles.td, fontWeight: '600' }}>{exp.worker_name}</td>
+                                <td style={styles.td}>{exp.reason}</td>
+                                <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700', color: '#be123c' }}>-{Number(exp.amount).toFixed(2)} MAD</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr style={{ backgroundColor: '#ffe4e6', fontWeight: '700', borderTop: '2px solid #fda4af' }}>
+                              <td colSpan={3} style={{ ...styles.td, textAlign: 'right' }}>TOTAL CHARGES DU MOIS :</td>
+                              <td style={{ ...styles.td, textAlign: 'right', color: '#be123c' }}>-{Number(monthlyDetail?.how_much_spent || monthlyDetail?.total_expenses_month || 0).toFixed(2)} MAD</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Monthly Sold Products Section */}
+                  {monthlyDetail?.products_sold?.length > 0 && (
+                    <div>
+                      <div
+                        onClick={() => setShowMonthlyProducts(!showMonthlyProducts)}
+                        style={{ padding: '12px 16px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <ShoppingBag size={16} style={{ color: '#2563eb' }} />
+                          <span style={{ fontWeight: '700', fontSize: '14px', color: '#1e293b' }}>
+                            Détail des Articles Vendus ({monthlyDetail.products_sold.length} Références)
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: '700', color: '#2563eb' }}>
+                            CA: {Number(monthlyDetail?.total_sales_revenue || 0).toFixed(2)} MAD • Gain: +{Number(monthlyDetail?.sales_profit_month ?? monthlyDetail?.sales_profit ?? 0).toFixed(2)} MAD
+                          </span>
+                          {showMonthlyProducts ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </div>
+                      </div>
+
+                      {showMonthlyProducts && (
+                        <div style={{ overflowX: 'auto', marginTop: '8px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                            <thead>
+                              <tr style={{ backgroundColor: '#f1f5f9' }}>
+                                <th style={{ ...styles.th, textAlign: 'left' }}>Article</th>
+                                <th style={{ ...styles.th, textAlign: 'left' }}>Catégorie</th>
+                                <th style={{ ...styles.th, textAlign: 'center' }}>Qté</th>
+                                <th style={{ ...styles.th, textAlign: 'right' }}>Prix Moyen</th>
+                                <th style={{ ...styles.th, textAlign: 'right' }}>CA Vente</th>
+                                <th style={{ ...styles.th, textAlign: 'right', color: '#16a34a' }}>Gain Net</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {monthlyDetail.products_sold.map((p, idx) => (
+                                <tr key={p.product_id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                  <td style={{ ...styles.td, fontWeight: '600' }}>
+                                    <div>{p.name}</div>
+                                    <div style={{ fontSize: '11px', color: '#6b7280' }}>{p.barcode}</div>
+                                  </td>
+                                  <td style={styles.td}>{p.category}</td>
+                                  <td style={{ ...styles.td, textAlign: 'center', fontWeight: '700' }}>{p.quantity_sold}</td>
+                                  <td style={{ ...styles.td, textAlign: 'right' }}>{Number(p.unit_price || 0).toFixed(2)}</td>
+                                  <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700' }}>{Number(p.total_revenue || 0).toFixed(2)} MAD</td>
+                                  <td style={{ ...styles.td, textAlign: 'right', fontWeight: '700', color: '#16a34a' }}>+{Number(p.total_profit || 0).toFixed(2)} MAD</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -480,7 +855,8 @@ export default function DashboardPage() {
               <div style={styles.loading}>Chargement des alertes...</div>
             ) : lowStockData?.items?.length === 0 ? (
               <div style={styles.emptyState}>
-                ✅ Tous les produits sont suffisamment alimentés en stock.
+                <CheckCircle2 size={16} style={{ color: '#16a34a', verticalAlign: 'middle', marginRight: '6px' }} />
+                <span>Tous les produits sont suffisamment alimentés en stock.</span>
               </div>
             ) : (
               <table style={styles.table}>

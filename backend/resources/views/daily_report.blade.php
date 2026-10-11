@@ -392,17 +392,27 @@
             </div>
 
             <div style="font-size: 11px; font-weight: 700; color: #7e22ce; text-transform: uppercase; margin: 12px 0 6px 0; letter-spacing: 0.5px;">
-                3. Total Consolidé Journalier
+                3. Bilan Consolidé & 4 Indicateurs Clés de la Journée
             </div>
-            <div class="kpi-grid" style="grid-template-columns: repeat(2, 1fr);">
-                <div class="kpi-card kpi-card-global">
-                    <div class="kpi-label">Chiffre d'Affaires Total (Ventes + Réparations)</div>
-                    <div class="kpi-val">{{ number_format($grand_total_revenue, 2) }} {{ $currency }}</div>
+            <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="kpi-card kpi-card-revenue">
+                    <div class="kpi-label">1. Combien Vendu (CA Total)</div>
+                    <div class="kpi-val" style="font-size: 15px;">{{ number_format($how_much_sold ?? $grand_total_revenue, 2) }} {{ $currency }}</div>
                 </div>
 
-                <div class="kpi-card kpi-card-profit" style="border-width: 2px;">
-                    <div class="kpi-label">Bénéfice Net Total Combiné</div>
-                    <div class="kpi-val" style="font-size: 18px;">+{{ number_format($grand_total_profit, 2) }} {{ $currency }}</div>
+                <div class="kpi-card kpi-card-profit">
+                    <div class="kpi-label">2. Combien Gagné (Marge Brute)</div>
+                    <div class="kpi-val" style="font-size: 15px;">+{{ number_format($how_much_earned ?? $grand_total_gross_profit ?? ($sales_profit_today + $reparations_profit_today), 2) }} {{ $currency }}</div>
+                </div>
+
+                <div class="kpi-card" style="background-color: #fef2f2; border-color: #fecaca;">
+                    <div class="kpi-label" style="color: #dc2626;">3. Combien Dépensé (Charges)</div>
+                    <div class="kpi-val" style="color: #dc2626; font-size: 15px;">-{{ number_format($how_much_spent ?? $total_expenses_today ?? 0, 2) }} {{ $currency }}</div>
+                </div>
+
+                <div class="kpi-card kpi-card-profit" style="border-width: 2px; border-color: #16a34a; background-color: #dcfce7;">
+                    <div class="kpi-label" style="color: #15803d; font-weight: 800;">4. Gain Réel Fin de Journée</div>
+                    <div class="kpi-val" style="color: #15803d; font-size: 16px;">+{{ number_format($how_much_gained ?? $grand_total_profit, 2) }} {{ $currency }}</div>
                 </div>
             </div>
         </div>
@@ -543,22 +553,66 @@
         </table>
         @endif
 
+        @if(!empty($expenses['items']) && count($expenses['items']) > 0)
+        <!-- Daily Expenses / Charges Breakdown -->
+        <div class="section-title" style="color: #dc2626; border-top: 1px dashed #d1d5db; padding-top: 16px; margin-top: 24px;">
+            <span>Dépenses & Sorties de Caisse de la Journée ({{ count($expenses['items']) }})</span>
+            <span class="section-count" style="color: #dc2626; font-weight: bold;">Total Sorties : -{{ number_format($total_expenses_today, 2) }} {{ $currency }}</span>
+        </div>
+
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th class="col-index">#</th>
+                    <th>Employé / Bénéficiaire</th>
+                    <th>Motif / Justification</th>
+                    <th>Enregistré Par</th>
+                    <th>Heure</th>
+                    <th style="text-align: right;">Montant Retiré</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($expenses['items'] as $idx => $exp)
+                <tr>
+                    <td class="col-index">{{ $idx + 1 }}</td>
+                    <td style="font-weight: 700; color: #111827;">{{ $exp['worker_name'] }}</td>
+                    <td>{{ $exp['reason'] }}</td>
+                    <td><span style="font-size: 11px; color: #6b7280;">{{ $exp['user_name'] }}</span></td>
+                    <td>{{ $exp['time'] }}</td>
+                    <td style="text-align: right; font-weight: 700; color: #dc2626;">-{{ number_format($exp['amount'], 2) }} {{ $currency }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+            <tfoot>
+                <tr class="totals-row">
+                    <td colspan="5" style="text-align: right;">TOTAL DÉPENSES DU JOUR :</td>
+                    <td style="text-align: right; color: #dc2626;">-{{ number_format($total_expenses_today, 2) }} {{ $currency }}</td>
+                </tr>
+            </tfoot>
+        </table>
+        @endif
+
         <!-- Global Consolidated Financial Recap -->
         <div style="background-color: #f8fafc; border: 2px solid #e2e8f0; border-radius: 6px; padding: 14px 18px; margin-top: 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
             <div>
                 <strong style="text-transform: uppercase; color: #1e293b; font-size: 11.5px; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">RÉCAPITULATIF FINANCIER GLOBAL DU JOUR</strong>
                 <span style="color: #64748b;">
-                    Ventes Magasin : CA {{ number_format($total_sales_revenue, 2) }} {{ $currency }} (Gain : +{{ number_format($sales_profit_today ?? $sales_profit ?? 0, 2) }} {{ $currency }})
+                    1. Ventes Magasin : CA {{ number_format($total_sales_revenue, 2) }} {{ $currency }} (Gain : +{{ number_format($sales_profit_today ?? $sales_profit ?? 0, 2) }} {{ $currency }})
                     <br>
-                    Atelier Réparations : CA {{ number_format($reparations_revenue_today ?? $reparations['revenue'] ?? 0, 2) }} {{ $currency }} (Gain : +{{ number_format($reparations_profit_today ?? $reparations['profit'] ?? 0, 2) }} {{ $currency }})
+                    2. Atelier Réparations : CA {{ number_format($reparations_revenue_today ?? $reparations['revenue'] ?? 0, 2) }} {{ $currency }} (Gain : +{{ number_format($reparations_profit_today ?? $reparations['profit'] ?? 0, 2) }} {{ $currency }})
+                    <br>
+                    3. Sorties de Caisse & Dépenses : <strong style="color: #dc2626;">-{{ number_format($total_expenses_today, 2) }} {{ $currency }}</strong>
                 </span>
             </div>
             <div style="text-align: right;">
-                <div style="font-size: 16px; font-weight: 800; color: #1e293b;">
-                    CA Total : {{ number_format($grand_total_revenue, 2) }} {{ $currency }}
+                <div style="font-size: 15px; font-weight: 800; color: #1e293b;">
+                    CA Vendu : {{ number_format($how_much_sold ?? $grand_total_revenue, 2) }} {{ $currency }}
                 </div>
-                <div style="font-size: 16px; font-weight: 800; color: #16a34a; margin-top: 3px;">
-                    Gain Net Total : +{{ number_format($grand_total_profit, 2) }} {{ $currency }}
+                <div style="font-size: 13px; font-weight: 700; color: #2563eb; margin-top: 2px;">
+                    Gain Brut : +{{ number_format($how_much_earned ?? $grand_total_gross_profit, 2) }} {{ $currency }}
+                </div>
+                <div style="font-size: 16px; font-weight: 900; color: #16a34a; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #cbd5e1;">
+                    Gain Net Réel : +{{ number_format($how_much_gained ?? $grand_total_profit, 2) }} {{ $currency }}
                 </div>
             </div>
         </div>

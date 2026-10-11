@@ -15,6 +15,7 @@ use App\Http\Controllers\AdminCashierController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\ReparationController;
 use App\Http\Controllers\ReparationInventoryPartController;
+use App\Http\Controllers\ExpenseController;
 
 // Public Authentication & OTP Password Reset routes
 Route::post('/login', [AuthController::class, 'login']);
@@ -40,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Reports endpoint
     Route::get('/reports/daily', [ReportController::class, 'daily']);
     Route::get('/reports/monthly', [ReportController::class, 'monthly']);
+    Route::get('/reports/monthly/detail', [ReportController::class, 'monthlyDetail']);
 
 
     // Low-stock notifications endpoint
@@ -83,4 +85,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Scanner routes
     Route::get('/scanner/products/{barcode}', [ScannerController::class, 'product']);
     Route::post('/scanner/sales', [ScannerController::class, 'sale']);
+
+    // Expenses / Cash Withdrawals (Charges) routes
+    Route::apiResource('expenses', ExpenseController::class);
 });

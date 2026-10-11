@@ -13,6 +13,7 @@ import ReturnsPage from './pages/ReturnsPage';
 import CashiersPage from './pages/CashiersPage';
 import SecurityPage from './pages/SecurityPage';
 import ReparationsPage from './pages/ReparationsPage';
+import ExpensesPage from './pages/ExpensesPage';
 
 export default function App() {
   const user = useSelector(selectCurrentUser);
@@ -52,6 +53,7 @@ export default function App() {
           element={!isReparateur ? <ReturnsPage /> : <Navigate to="/reparations" replace />} 
         />
         <Route path="reparations" element={<ReparationsPage />} />
+        <Route path="expenses" element={<ExpensesPage />} />
         <Route 
           path="cashiers" 
           element={isAdmin ? <CashiersPage /> : <Navigate to={defaultHome} replace />} 
