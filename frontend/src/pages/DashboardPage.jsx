@@ -855,7 +855,8 @@ export default function DashboardPage() {
               <div style={styles.loading}>Chargement des alertes...</div>
             ) : lowStockData?.items?.length === 0 ? (
               <div style={styles.emptyState}>
-                ✅ Tous les produits sont suffisamment alimentés en stock.
+                <CheckCircle2 size={16} style={{ color: '#16a34a', verticalAlign: 'middle', marginRight: '6px' }} />
+                <span>Tous les produits sont suffisamment alimentés en stock.</span>
               </div>
             ) : (
               <table style={styles.table}>
